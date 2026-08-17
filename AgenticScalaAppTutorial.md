@@ -150,11 +150,11 @@ The sixth hard rule: audit the set, then test it empirically, and fix failures i
 
 
 
-Mechanism 2: the fresh context. When an agent is invoked, the runtime assembles a new context containing three things only: the agent file's body (which becomes its system prompt), the project memory (CLAUDE.md plus files it imports), and your task prompt. The agent does not see your conversation, other agents' work, or its own previous runs. Consequence: anything an agent must always know has to be in its file or in CLAUDE.md, and anything one agent must tell another has to travel through your prompts (you paste report text forward).
+Mechanism 2: the fresh context. When an agent is invoked, the runtime assembles a new context containing three things only: the agent file's body (which becomes its system prompt), the project memory (CLAUDE.md plus files it imports), and your task prompt. The agent does not see your conversation, other agents' work, or its own previous runs. Consequence: anything an agent must always know has to be in its file or in CLAUDE.md, and anything one agent must tell another has to travel through your prompts (you paste report text forward). For dependencies between agents read [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
 
 Mechanism 3: the tool fence. The frontmatter `tools:` list is enforced by the runtime. The code-reviewer's list contains no Edit and no Write, so it cannot modify files no matter what anyone types. When a phase below says "the agent cannot do X", this is usually the mechanism.
 
-Mechanism 4: the instruction hierarchy inside the file. Each agent body in this project has five sections, and each section drives a different observable behavior:
+Mechanism 4: the instruction hierarchy inside the file. Each agent body in this project has five sections, and each section drives a different observable behavior.
 
 | Section in the agent file | Behavior you will observe |
 |---|---|
@@ -167,10 +167,6 @@ Mechanism 4: the instruction hierarchy inside the file. Each agent body in this 
 The phase walkthroughs below point at specific laws by number, so you can open the agent file and see the exact sentence that caused the behavior.
 
 Mechanism 5: hooks and permissions, defined in `.claude/settings.json`. These run outside the model and cannot be talked out of anything. Three hooks matter here. The PostToolUse hook runs after every Edit or Write and formats Scala files (it always exits 0, so it never blocks). The PreToolUse hook inspects every shell command before it runs and exits 2 to block dangerous patterns such as DROP TABLE or terraform destroy; the text it prints to stderr is shown to the agent, which is why a blocked agent changes course instead of retrying. The Stop hook runs when an agent tries to finish; if Scala sources changed but the test suite has not run since (checked through a marker file that the build's `check` alias touches), it exits 2 and the agent is sent back to run `sbt check`. The permission lists in the same file pre-approve routine commands (sbt, git add/commit, terraform plan) and deny catastrophic ones (terraform apply, force-push) for everyone, agents and orchestrator alike.
-
-Summary you can carry through the rest of the tutorial: your prompt selects the agent and carries the specification of this one job; the agent file carries the standing discipline; the hooks and permissions carry the guarantees. When a phase says "notice the prompt never mentions running the tests", the missing sentence is in one of the last two places.
-
-Here is the addition, paste-ready, in the tutorial's style (no em-dashes, no emphasis markup, anchor-safe headings).
 
 ---
 
@@ -840,3 +836,85 @@ High-similarity description pairs predict future misroutes between those agents;
 
 What the fixpoint converges on, restated in this light: not a bag of words but a partition of meaning space into ten regions. Descriptions act as labeled prototypes; exemplar phrases move the centers; disambiguation sentences and exclusions carve the boundaries; the hard-negative corpus samples where the boundaries currently fall. The loop is prototype refinement, its convergence is empirical, and it is relative to the router model, which is why the suite reruns after every model upgrade. Nothing in the word-level procedure is invalidated; the effort just moves: fewer keywords, one prototype per cluster, an explicit contrast at every known ambiguity, and a test corpus weighted toward the boundaries that surface reading cannot see.
 
+---
+<a name="appendixF"></a>
+## Appendix F:  Dependencies between agents: the BLOCKED-ON protocol
+
+Mechanism 2 has a consequence that deserves its own treatment: if agent B's work depends on agent A's output, nothing connects them. B cannot see A's transcript, cannot call A, and cannot wait for A. Dependencies are therefore handled in exactly three places, and never agent to agent.
+
+Place 1: the orchestrator's control flow. Known dependencies are sequencing, and sequencing lives in the plan, never in agent files. The orchestrator runs A, reads its report, gates, then runs B with A's report pasted into the prompt. This is why the genesis phases are ordered: schema before data tier, infrastructure before deploy. Agent files stay timeless; the dependency graph is per-project state and travels in task text.
+
+Place 2: the durable world. Wherever possible, encode the dependency as machine-readable state that B reads itself, instead of as a fact someone must remember to pass. Reports carry judgment; the world carries facts. B should never be told the VPC id in a prompt, because its own procedure reads `terraform output -raw vpc_id`; the deploy-engineer re-derives the ECR URL from `aws ecr describe-repositories`; the Stop hook reads a marker file rather than trusting anyone's claim that tests ran. Every agent whose work has upstream dependencies opens its procedure with this move (verify, do not trust), which converts a missing dependency from a crash in the middle of work into a clean, early, routable stop.
+
+Place 3: the blocked agent's own report, when the dependency is discovered as a runtime error. This is the case the protocol below exists for.
+
+### When a dependency fails at runtime
+
+Suppose the deploy-engineer is mid-procedure and an AWS call fails because VPC X does not exist. Three rules govern what the blocked agent must do.
+
+1. Capture the error verbatim before doing anything else. Evidence before remediation; post-failure state is perishable.
+2. Classify the failure by the ownership map in docs/agents.md. Is the broken thing inside my artifact class (then retry or fix within my role), or inside another agent's (then stop)? The ownership map is the error-routing table, not just the task-routing table.
+3. Stop cleanly and report BLOCKED-ON with three parts: the missing artifact and its owning agent, the verbatim evidence, and the state left behind. The agent must never create or repair another agent's artifact to unblock itself; that is how one incident becomes two.
+
+### The repair loop
+
+The loop belongs to the orchestrator. Blocked agents do not invoke their repairers; if agents auto-triggered each other, the audit trail would dissolve and a misclassified error would cascade unsupervised. The loop, shown on the VPC example with real prompts:
+
+```text
+You:  /deploy staging
+
+deploy-engineer: preconditions pass; image pushed; service update fails.
+Report: DEPLOY BLOCKED.
+  BLOCKED-ON: VPC/subnets for taskforge-staging (owner: infra-engineer)
+  Evidence: "InvalidParameterException: subnets [subnet-...] not found"
+  State left behind: image taskforge:abc123 in ECR; no revision registered.
+
+You:  Use the infra-engineer agent to reconcile the staging network. The
+      deploy-engineer reported this failure: [paste the report verbatim].
+      Run terraform plan, determine why the VPC/subnets are missing (drift,
+      never-applied stack, or deleted resources), and present the plan.
+
+infra-engineer: plan shows the VPC absent from real infrastructure but present
+in code. Presents the plan and stops (its law: apply is never yours).
+
+You:  terraform apply        # your hands; the deny rule keeps it that way
+
+You:  /deploy staging        # the blocked agent again, fresh, no memory needed
+```
+
+Two designed-in properties make the final step safe. First, the blocked agent re-runs from scratch (fresh context means there is no resume), so every agent's procedure must be idempotent: image pushes are repeatable, task-definition registration just creates the next revision, Flyway skips applied migrations, terraform converges. Check every procedure you write with the question "is it safe to run this twice?", because the repair loop guarantees that someday it will run twice. Second, the re-run needs no memory of the incident, because the thing it depends on now exists in the world, where its own precondition checks find it.
+
+### The three insertions that make this standing policy
+
+Insertion 1, into every agent file's report contract (the factory-engineer applies it to all ten in one ratified change).
+
+```markdown
+If a precondition or a runtime dependency fails, end your report with:
+BLOCKED-ON: <missing artifact> (owner: <agent per docs/agents.md>)
+Evidence: <the verbatim error or probe output>
+State left behind: <what you changed before stopping, so a re-run is safe>
+Then stop. Never create or repair another agent's artifact to unblock yourself.
+```
+
+Insertion 2, into CLAUDE.md's hard rules (one sentence, inside the scarcity budget).
+
+```markdown
+- On a failed precondition or dependency, report BLOCKED-ON with the owning
+  agent per docs/agents.md and stop; never work around a missing dependency
+  by touching another agent's artifacts.
+```
+
+Insertion 3, into docs/agents.md, next to the escalation policy.
+
+```markdown
+## The repair loop (orchestrator procedure)
+
+On a BLOCKED-ON report: (1) delegate the verbatim evidence to the named owning
+agent as a work order; (2) gate its fix as usual (plans applied by a human,
+constitutional changes ratified); (3) re-run the blocked agent fresh, pasting
+the fix's report. Blocked agents never invoke their repairers directly; the
+loop always passes through the orchestrator so every hop stays auditable.
+Agent procedures must be idempotent so the re-run is safe by construction.
+```
+
+---
