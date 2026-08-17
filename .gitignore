@@ -1,0 +1,17 @@
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.bloop/
+.idea/
+.vscode/
+*.class
+*.log
+.env
+.env.*
+.claude/.last-test-run
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/*.tfvars
+!infra/terraform/example.tfvars

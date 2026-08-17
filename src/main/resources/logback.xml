@@ -1,0 +1,17 @@
+<configuration>
+  <!-- Plain single-line logs to STDOUT: ECS ships container stdout to CloudWatch Logs, and the
+       monitoring agent greps CloudWatch — structure comes from consistent prefixes, not files. -->
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %-5level %logger{24} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="org.http4s" level="INFO"/>
+  <logger name="com.zaxxer.hikari" level="WARN"/>
+  <logger name="org.flywaydb" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+</configuration>

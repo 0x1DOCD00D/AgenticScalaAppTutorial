@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.postgres-mcp-server@latest", "--readonly", "true"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "AWS_REGION": "${AWS_REGION:-us-east-1}"
+      }
+    },
+    "aws-api": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.aws-api-mcp-server@latest"],
+      "env": {
+        "AWS_REGION": "${AWS_REGION:-us-east-1}",
+        "AWS_API_MCP_WORKING_DIR": "/tmp/aws-mcp"
+      }
+    },
+    "ecs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.ecs-mcp-server@latest"],
+      "env": {
+        "AWS_REGION": "${AWS_REGION:-us-east-1}",
+        "ALLOW_WRITE": "false"
+      }
+    },
+    "terraform": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.terraform-mcp-server@latest"]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  }
+}

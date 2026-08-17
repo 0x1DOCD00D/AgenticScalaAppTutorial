@@ -1,0 +1,39 @@
+# Claude Code as a teammate on GitHub: mention @claude in an issue or PR comment and it
+# implements/reviews/fixes inside the runner, following CLAUDE.md and the same agents.
+name: Claude
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened]
+
+jobs:
+  claude:
+    if: contains(github.event.comment.body || github.event.issue.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+
+      - uses: sbt/setup-sbt@v1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The repo's CLAUDE.md, agents, and hooks apply here too — same rules as local work.
+          claude_args: "--allowedTools 'Bash(sbt *),Read,Edit,Write,Grep,Glob'"

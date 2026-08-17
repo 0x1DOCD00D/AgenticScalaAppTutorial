@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskForge</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#ffffff; --ink:#1a202c; --muted:#718096; --accent:#3b5bdb; --line:#e2e8f0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:16px 24px; display:flex; align-items:center; gap:12px; }
+  header h1 { font-size:18px; margin:0; }
+  header .dot { width:10px; height:10px; border-radius:50%; background:#38a169; }
+  main { max-width:860px; margin:24px auto; padding:0 16px; }
+  form { display:flex; gap:8px; margin-bottom:20px; }
+  input, textarea, select, button { font:inherit; }
+  input[type=text] { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  button.secondary { background:#edf2f7; color:var(--ink); }
+  .filters { display:flex; gap:8px; margin-bottom:12px; }
+  .filters button { background:#edf2f7; color:var(--muted); padding:6px 12px; font-size:13px; }
+  .filters button.active { background:var(--accent); color:#fff; }
+  ul { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px; }
+  li { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+  li .title { flex:1; }
+  li .title small { display:block; color:var(--muted); }
+  .badge { font-size:12px; padding:3px 10px; border-radius:999px; background:#edf2f7; color:var(--muted); }
+  .badge.InProgress { background:#ebf8ff; color:#2b6cb0; }
+  .badge.Done { background:#f0fff4; color:#2f855a; }
+  .error { background:#fff5f5; border:1px solid #feb2b2; color:#c53030; padding:10px 14px; border-radius:8px; margin-bottom:12px; display:none; }
+</style>
+</head>
+<body>
+<header><span class="dot"></span><h1>TaskForge</h1></header>
+<main>
+  <div id="error" class="error"></div>
+  <form id="createForm">
+    <input type="text" id="title" placeholder="What needs doing?" required maxlength="200">
+    <button type="submit">Add task</button>
+  </form>
+  <div class="filters" id="filters">
+    <button data-status="" class="active">All</button>
+    <button data-status="Todo">Todo</button>
+    <button data-status="InProgress">In progress</button>
+    <button data-status="Done">Done</button>
+  </div>
+  <ul id="tasks"></ul>
+</main>
+<script>
+  // Deliberately framework-free: the tutorial's focus is the agentic workflow and the Scala
+  // tiers; ~80 lines of vanilla JS keeps the presentation tier fully inspectable.
+  const api = '/api/tasks';
+  let filter = '';
+
+  const $ = (id) => document.getElementById(id);
+
+  function showError(msg) {
+    const el = $('error');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  }
+
+  async function call(url, opts) {
+    const res = await fetch(url, opts);
+    if (res.status === 204) return null;
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body && body.error ? body.error : ('HTTP ' + res.status));
+    return body;
+  }
+
+  const nextStatus = { Todo: 'InProgress', InProgress: 'Done', Done: 'Todo' };
+  const nextLabel  = { Todo: 'Start', InProgress: 'Finish', Done: 'Reopen' };
+
+  async function refresh() {
+    try {
+      const tasks = await call(api + (filter ? '?status=' + filter : ''));
+      const ul = $('tasks');
+      ul.innerHTML = '';
+      for (const t of tasks) {
+        const li = document.createElement('li');
+
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + t.status;
+        badge.textContent = t.status;
+
+        const title = document.createElement('div');
+        title.className = 'title';
+        title.textContent = t.title;
+        const small = document.createElement('small');
+        small.textContent = '#' + t.id + ' · updated ' + new Date(t.updatedAt).toLocaleString();
+        title.appendChild(small);
+
+        const advance = document.createElement('button');
+        advance.className = 'secondary';
+        advance.textContent = nextLabel[t.status];
+        advance.onclick = () =>
+          call(api + '/' + t.id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: nextStatus[t.status] })
+          }).then(refresh).catch(e => showError(e.message));
+
+        const del = document.createElement('button');
+        del.className = 'secondary';
+        del.textContent = 'Delete';
+        del.onclick = () =>
+          call(api + '/' + t.id, { method: 'DELETE' }).then(refresh).catch(e => showError(e.message));
+
+        li.append(badge, title, advance, del);
+        ul.appendChild(li);
+      }
+    } catch (e) { showError(e.message); }
+  }
+
+  $('createForm').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    call(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: $('title').value, description: '' })
+    }).then(() => { $('title').value = ''; refresh(); })
+      .catch(e => showError(e.message));
+  });
+
+  $('filters').addEventListener('click', (ev) => {
+    if (ev.target.tagName !== 'BUTTON') return;
+    filter = ev.target.dataset.status;
+    document.querySelectorAll('#filters button').forEach(b => b.classList.remove('active'));
+    ev.target.classList.add('active');
+    refresh();
+  });
+
+  refresh();
+</script>
+</body>
+</html>
