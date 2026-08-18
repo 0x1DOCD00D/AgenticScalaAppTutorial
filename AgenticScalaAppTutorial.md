@@ -53,7 +53,209 @@ The rule that makes the whole design work: every artifact class has exactly one 
 
 ## 2. How agent instructions become actions
 
-You need this mental model before Phase 0, because every "what happens" section later refers to it. There are five mechanisms.
+The AI agentic system is shown in five small diagrams: ownership, the floor and its
+standing gates, proposal and disposal, the operational workflow, and the runtime paths
+with their feedback loops. Node border colors identify the kind of node (violet: human
+side; blue: agent; orange: constitution and floor; amber: repository artifact; green: AWS
+runtime); fills stay neutral. Solid arrows mean creates, owns, or executes; dashed arrows
+mean gates, reads, or bounded writes. A rendered version of all five is agent-graph.html.
+
+#### Ownership: one writer per artifact class
+
+Each agent's solid arrow points at the one artifact class it creates and owns. The two
+dashed arrows are the only bounded exceptions: version bumps into the build ledger, and
+the tests an implementer ships with its own feature.
+
+```mermaid
+flowchart LR
+  subgraph AG["Agent team"]
+    direction TB
+    FE["factory-engineer"]
+    BE["build-engineer"]
+    DU["dependency-updater"]
+    FI["feature-implementer"]
+    TE["test-engineer"]
+    DM["db-migrator"]
+    IE["infra-engineer"]
+    DE["deploy-engineer"]
+    IR["incident-responder"]
+  end
+  subgraph ART["Artifact classes"]
+    direction TB
+    AF["CLAUDE.md · docs/agents.md<br/>.claude/agents/* · hooks · settings.json · .mcp.json"]
+    AB["build.sbt · project/*<br/>.scalafmt.conf · docker-compose.yml · .gitignore"]
+    AS["src/main/**"]
+    AT["src/test/**"]
+    AM["db/migration/V*.sql"]
+    AI["infra/terraform/**<br/>scripts/*.sh · .github/workflows/**"]
+    DEP["deployments<br/>(ECS task-definition revisions)"]
+    AN["docs/incidents/*"]
+  end
+  FE --> AF
+  BE --> AB
+  DU -.->|"version bumps only"| AB
+  FI --> AS
+  FI -.->|"feature tests"| AT
+  TE --> AT
+  DM --> AM
+  IE --> AI
+  DE --> DEP
+  IR --> AN
+
+  classDef agent fill:#ffffff,stroke:#2a78d6,stroke-width:1.5px,color:#0b0b0b
+  classDef fact fill:#ffffff,stroke:#eb6834,stroke-width:1.5px,color:#0b0b0b
+  classDef artifact fill:#ffffff,stroke:#eda100,stroke-width:1.5px,color:#0b0b0b
+  classDef runtime fill:#ffffff,stroke:#1baf7a,stroke-width:1.5px,color:#0b0b0b
+  class FE,BE,DU,FI,TE,DM,IE,DE,IR agent
+  class AF fact
+  class AB,AS,AT,AM,AI,AN artifact
+  class DEP runtime
+  style AG fill:#fcfcfb,stroke:#d8d7d0
+  style ART fill:#fcfcfb,stroke:#d8d7d0
+```
+
+The code-reviewer is absent here on purpose: it owns nothing, which is its design (no
+write tools). It appears in the next diagram, where its work lives.
+
+#### The floor and the standing gates
+
+What constrains every change, all the time, regardless of who makes it. The constitution
+and floor load into every agent context; the two hooks act on every tool call and every
+attempt to finish; the code-reviewer reads every diff; the routing test corpus gates every
+description change.
+
+```mermaid
+flowchart LR
+  AF["constitution and floor<br/>CLAUDE.md · .claude/agents/*<br/>settings.json · hooks"]
+  CTX["every agent context<br/>(fences · permissions · memory)"]
+  GH["guard hook:<br/>blocks dangerous commands"]
+  SH["stop hook:<br/>blocks finishing untested"]
+  CR["code-reviewer"]
+  DIFF["every diff, every artifact class"]
+  RT["docs/routing-tests.md"]
+  AF -->|"loads into"| CTX
+  AF -->|"defines"| GH
+  AF -->|"defines"| SH
+  GH -.->|"exit 2 on DROP · TRUNCATE · destroy"| CTX
+  SH -.->|"exit 2 if tests did not run"| CTX
+  CR -.->|"reviews"| DIFF
+  RT -.->|"gates description changes"| AF
+
+  classDef agent fill:#ffffff,stroke:#2a78d6,stroke-width:1.5px,color:#0b0b0b
+  classDef fact fill:#ffffff,stroke:#eb6834,stroke-width:1.5px,color:#0b0b0b
+  classDef artifact fill:#ffffff,stroke:#eda100,stroke-width:1.5px,color:#0b0b0b
+  class CR agent
+  class AF,GH,SH,RT fact
+  class CTX,DIFF artifact
+```
+
+#### Proposal and disposal: what agents produce, what only you enact
+
+Every irreversible or authority-changing act is split in two: an agent produces an inert
+proposal, and a specific human action turns it into reality. If you do nothing, nothing
+takes effect.
+
+```mermaid
+flowchart LR
+  subgraph PR["Agents propose (inert until disposed)"]
+    direction TB
+    P1["factory-engineer:<br/>constitutional diff"]
+    P2["infra-engineer:<br/>validated terraform plan"]
+    P3["dependency-updater:<br/>upgrade PR"]
+    P4["db-migrator:<br/>destructive DDL + blast-radius analysis"]
+  end
+  HU["You"]
+  P1 -->|"ratify: review · commit · restart"| HU
+  P2 -->|"terraform apply, your terminal"| HU
+  P3 -->|"merge the PR"| HU
+  P4 -->|"written sign-off"| HU
+
+  classDef principal fill:#ffffff,stroke:#4a3aa7,stroke-width:1.5px,color:#0b0b0b
+  classDef fact fill:#ffffff,stroke:#eb6834,stroke-width:1.5px,color:#0b0b0b
+  class HU principal
+  class P1,P2,P3,P4 fact
+  style PR fill:#fcfcfb,stroke:#d8d7d0
+```
+
+#### The operational workflow
+
+The numbered delegation order. W1 to W9 is the build and release path; every agent's
+report returns to the orchestrator (drawn once as the reports edge). The two standing
+loops, W10 and W11, are in the next diagram where their triggers live.
+
+```mermaid
+flowchart LR
+  HU["You"]
+  OR["Orchestrator<br/>(main session, plan mode)"]
+  FE["factory-engineer"]
+  BE["build-engineer"]
+  DM["db-migrator"]
+  FI["feature-implementer"]
+  TE["test-engineer"]
+  CR["code-reviewer"]
+  IE["infra-engineer"]
+  DE["deploy-engineer"]
+  HU -->|"W1 intent"| OR
+  OR -->|"W2 forge or evolve the factory"| FE
+  OR -->|"W3 build"| BE
+  OR -->|"W4 schema"| DM
+  OR -->|"W5 implement"| FI
+  OR -->|"W6 harden"| TE
+  OR -->|"W7 review"| CR
+  OR -->|"W8 infra (you apply)"| IE
+  OR -->|"W9 /deploy"| DE
+  FE -.->|"reports return"| OR
+
+  classDef principal fill:#ffffff,stroke:#4a3aa7,stroke-width:1.5px,color:#0b0b0b
+  classDef agent fill:#ffffff,stroke:#2a78d6,stroke-width:1.5px,color:#0b0b0b
+  class HU,OR principal
+  class FE,BE,DM,FI,TE,CR,IE,DE agent
+```
+
+#### Runtime paths and the two feedback loops
+
+How repository artifacts become a running system, and how the running system feeds work
+back: alarms drive the incident path (W10), and the weekly cron drives maintenance (W11).
+
+```mermaid
+flowchart LR
+  AC["scripts/deploy.sh"]
+  DE["deploy-engineer"]
+  IMG["ECR image<br/>(git-SHA tag)"]
+  ECS["ECS Fargate<br/>service revisions"]
+  AM["db/migration/V*.sql"]
+  RDS[("RDS PostgreSQL")]
+  CW["CloudWatch alarms"]
+  IR["incident-responder"]
+  OR["Orchestrator"]
+  AW[".github/workflows/maintenance"]
+  DU["dependency-updater"]
+  DE -->|"runs"| AC
+  AC -->|"build · push"| IMG
+  IMG -->|"new revision"| ECS
+  AM -.->|"Flyway applies on boot"| RDS
+  ECS -.->|"metrics"| CW
+  CW -->|"W10 alarm: /incident"| IR
+  IR -.->|"rollback · restart · scale 1-4"| ECS
+  IR -->|"W10b prevention item"| OR
+  AW -->|"W11 weekly cron"| DU
+
+  classDef principal fill:#ffffff,stroke:#4a3aa7,stroke-width:1.5px,color:#0b0b0b
+  classDef agent fill:#ffffff,stroke:#2a78d6,stroke-width:1.5px,color:#0b0b0b
+  classDef artifact fill:#ffffff,stroke:#eda100,stroke-width:1.5px,color:#0b0b0b
+  classDef runtime fill:#ffffff,stroke:#1baf7a,stroke-width:1.5px,color:#0b0b0b
+  class OR principal
+  class DE,IR,DU agent
+  class AC,AM,AW artifact
+  class IMG,ECS,RDS,CW runtime
+```
+
+Reading the five together: diagram 1 is the one-writer rule; diagram 2 is what no change
+can escape; diagram 3 is where human authority concentrates; diagram 4 is the order work
+flows; diagram 5 is how the deployed system pulls the loop closed by generating the next
+round of work. We need this mental model before Phase 0, because every "what happens" section later refers to it. 
+
+### There are five mechanisms.
 
 Mechanism 1: routing by description. A subagent is one markdown file in `.claude/agents/<name>.md` with YAML frontmatter. When your prompt says "Use the build-engineer agent to create the sbt build", Claude Code looks up the agent by name; when your prompt merely describes work ("set up the build for this project"), Claude Code matches your words against every agent's `description` field and picks the best fit. This is why every description in this project contains the phrase "Use for ..." followed by trigger words: descriptions are routing patterns , not documentation. More discussion on maximizing routing efficacy is  in [Appendix E](#appendix-e-routing-in-meaning-space).
 
@@ -148,8 +350,6 @@ The general test, which you can apply mechanically to all ten descriptions at on
 
 The sixth hard rule: audit the set, then test it empirically, and fix failures in the description rather than in your prompts. The collision audit: write ten realistic requests, assign each to an agent by hand, then check that no request's wording plausibly matches two descriptions; where it does, sharpen the trigger clauses until exactly one wins. The orphan audit: check that every lifecycle stage's natural vocabulary appears in some description; a stage that matches nothing will be handled inline by the orchestrator, which means by nobody with laws. Then probe live: phrase a request without naming any agent and see who picks it up. If the wrong agent answers, the temptation is to just name the right agent in future prompts. Resist it; explicit naming is a workaround that lives in your head, while a corrected description is a fix that works for every future session, every teammate, and every scheduled run where nobody is present to name anyone.
 
-
-
 Mechanism 2: the fresh context. When an agent is invoked, the runtime assembles a new context containing three things only: the agent file's body (which becomes its system prompt), the project memory (CLAUDE.md plus files it imports), and your task prompt. The agent does not see your conversation, other agents' work, or its own previous runs. Consequence: anything an agent must always know has to be in its file or in CLAUDE.md, and anything one agent must tell another has to travel through your prompts (you paste report text forward). For dependencies between agents read [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
 
 Mechanism 3: the tool fence. The frontmatter `tools:` list is enforced by the runtime. The code-reviewer's list contains no Edit and no Write, so it cannot modify files no matter what anyone types. When a phase below says "the agent cannot do X", this is usually the mechanism.
@@ -164,9 +364,25 @@ Mechanism 4: the instruction hierarchy inside the file. Each agent body in this 
 | boundaries | refusals that name another agent instead |
 | report | the structure of the text it returns to you |
 
-The phase walkthroughs below point at specific laws by number, so you can open the agent file and see the exact sentence that caused the behavior.
+The phase walkthroughs below point at specific laws by number, so you can open the agent file and see the exact sentence that caused the behavior. The five are the required functions, not a cap on headings. The honest rule: every agent body must serve five functions (identity, constraints, sequence, boundaries, contract), and may add more sections only when the role's shape demands them. In fact the project's own ten agents already demonstrate this: several of them have headings beyond the canonical five, and each extra heading is there for a nameable reason. Walking through them gives you the complete list of justified additions.
 
-Mechanism 5: hooks and permissions, defined in `.claude/settings.json`. These run outside the model and cannot be talked out of anything. Three hooks matter here. The PostToolUse hook runs after every Edit or Write and formats Scala files (it always exits 0, so it never blocks). The PreToolUse hook inspects every shell command before it runs and exits 2 to block dangerous patterns such as DROP TABLE or terraform destroy; the text it prints to stderr is shown to the agent, which is why a blocked agent changes course instead of retrying. The Stop hook runs when an agent tries to finish; if Scala sources changed but the test suite has not run since (checked through a marker file that the build's `check` alias touches), it exits 2 and the agent is sent back to run `sbt check`. The permission lists in the same file pre-approve routine commands (sbt, git add/commit, terraform plan) and deny catastrophic ones (terraform apply, force-push) for everyone, agents and orchestrator alike.
+*Preconditions*. The deploy-engineer has a section the implementer does not: "Preconditions (verify, don't trust)". It exists because that agent guards an irreversible, expensive act, so it needs an explicit entry gate that runs before the procedure proper: clean tree, green check, no pending destructive migration. Structurally it is a specialization of the procedure (step zero), but giving it its own heading changes behavior: a titled section is harder for the model to skim past than a first bullet. Add this section to any agent whose action is irreversible or costly to retry; omit it everywhere else, because an implementer that re-verifies the world before every small edit is just slow.
+
+*Scope*. The dependency-updater has a "Scope" section ("you move VERSIONS only; structural build changes belong to build-engineer"). It exists for exactly one reason: two agents share one file. When artifact ownership splits inside a single file (the version ledger versus the structure of build.sbt), the boundary cannot be expressed as file paths, so it needs its own section drawing the line in terms of intent. If your ownership map never splits within a file, you never need this section.
+
+*Cautions, or tripwires*. The dependency-updater's "Cautions specific to this stack" section (doobie RC imports move; http4s milestones are banned; upickle majors trip JsonCodecSuite) is accumulated scar tissue, and it is the one section designed to grow over time: every incident adds a line. It is warranted for two role types: maintenance agents that run unattended (no human present to supply context), and any role whose domain has recurring, nameable traps. For other agents the same content lives inside the iron laws; a separate section is justified when the list is open-ended rather than fixed.
+
+*Mission with enumerable categories*. The test-engineer opens with "Mission" instead of a bare role line: find what the implementation missed, then four enumerable categories (boundaries, illegal transitions, malformed input, concurrency). This is the role line expanded, and the expansion is warranted specifically for adversarial or search roles, where the job is enumeration and adjectives ("write good tests") produce nothing. If the role's output is a search result, give it the search taxonomy as a section.
+
+*Renamed variants that are not additions at all*. The incident-responder's "Triage order" is its procedure; its "Rules of engagement" are its iron laws. Heading names should fit the role's own vocabulary; the audit that matters is functional, not typographic. When you review an agent file, do not check that the headings match the template; check that every sentence in the file serves one of the functions: identity, constraint, sequence, boundary, or contract. A sentence serving none of them is channel misplacement (per-task state, another agent's procedure, general API reference), and it goes.
+
+Two additions that recent work layered on, both extensions of existing functions rather than new ones: the BLOCKED-ON block extends the report contract (every agent, one ratified change), and a routing-tests law extends the factory-engineer's constraints. That is the normal way the skeleton evolves: the five functions stay fixed; their contents grow.
+
+One genuine candidate for a sixth function that this project deliberately does not use: worked examples (few-shot output samples inside the body). They help when an agent's report format is intricate and precision matters more than length; they cost heavily against the size budget, and a schema-like contract usually suffices. Reach for an example section only after a contract-phrased report has failed twice.
+
+The economic rule that keeps all of this honest: the length budget is fixed even though the section list is not. An agent body stays around sixty lines; adding a Preconditions or Cautions section should usually be paid for by tightening something else, because six sections competing for salience weaken each other exactly the way ten iron laws do. So: five functions always, entry gates for the irreversible, scope lines for shared files, tripwire lists for the trap-prone and unattended, taxonomies for the adversarial, and nothing else without a failure that demands it.
+
+Mechanism 5: hooks and permissions, defined in `.claude/settings.json`. These run outside the model and cannot be talked out of anything. Three hooks matter here. The PostToolUse hook runs after every Edit or Write and formats Scala files (it always exits 0, so it never blocks). The PreToolUse hook inspects every shell command before it runs and exits 2 to block dangerous patterns such as DROP TABLE or terraform destroy; the text it prints to stderr is shown to the agent, which is why a blocked agent changes course instead of retrying. The Stop hook runs when an agent tries to finish; if Scala sources changed but the test suite has not run since (checked through a marker file that the build's `check` alias touches), it exits 2 and the agent is sent back to run `sbt check`. The permission lists in the same file pre-approve routine commands (sbt, git add/commit, terraform plan) and deny catastrophic ones (terraform apply, force-push) for everyone, agents and orchestrator alike. More information about hooks is available in [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
 
 ---
 
@@ -194,7 +410,7 @@ Create `docs/routing-tests.md`, a labeled corpus of requests. One table, three c
 
 ### Running the suite
 
-For each row, ask the router to choose without doing the work, and compare against the label:
+For each row, ask the router to choose without doing the work, and compare against the label.
 
 ```bash
 while IFS='|' read -r _ request expected _; do
@@ -210,7 +426,7 @@ A clean run prints nothing. Run it whenever any description changes, and after a
 
 ### The expansion loop
 
-When the suite reports misroutes, repair by expansion, one discriminating phrase at a time. The loop:
+When the suite reports misroutes, repair by expansion, one discriminating phrase at a time. The loop consists of the following steps.
 
 1. Generate. For each agent, have a plain session generate a fresh batch of paraphrased requests it should and should not receive. Add them to the corpus with labels from the ownership map.
 2. Route. Run the suite; collect misroutes.
@@ -220,9 +436,32 @@ When the suite reports misroutes, repair by expansion, one discriminating phrase
 
 Three regularizers keep the loop convergent instead of oscillating. Keep each description under its length budget, so repair must choose the best phrase rather than accumulate all phrases. Never add a term that names another agent's artifacts. And never repair by editing prompts instead of descriptions; a prompt workaround fixes one session, a description fix routes correctly for every future session, teammate, and scheduled run.
 
+The loop is a hybrid by design, and the split follows the same principle as everything else in the project: measurement is mechanized, judgment is delegated to an agent, and disposal stays gated by a human. Some steps are code you can run in CI; some are LLM work you delegate; two must never be automated because they are constitutional. Here is the step-by-step assignment.
+
+| Loop step | Performed by | Automated? |
+|---|---|---|
+| 0. Add a failing row when a real misroute is observed | the human who saw it (via factory-engineer, since the corpus is governance territory) | manual by nature; the trigger is an observation |
+| 1. Generate paraphrase batches and hard negatives | a plain session or the factory-engineer, prompted; labels come mechanically from the ownership map | LLM work; can be scheduled |
+| 2. Route the corpus and score it | the runner script (headless claude -p per row) | fully automated |
+| 3. Repair descriptions | factory-engineer prepares the edit; the human ratifies | never fully automated; constitutional |
+| 4. Regression check after each repair | the same runner over the whole corpus | fully automated |
+| 5. Declare the fixpoint, accept residual misroutes, schedule re-runs | the human | judgment; stays manual |
+
+The reasons behind the three categories, because they generalize.
+
+Steps 2 and 4 are pure measurement: a script feeds each request to a headless session and compares the answer to the label. Nothing about this needs a person, and everything about it benefits from being boring and repeatable. The natural home is a CI job triggered when anything under .claude/agents/ or docs/routing-tests.md changes, so a description edit that breaks routing cannot merge, exactly as a code edit that breaks tests cannot. One operational caveat: each row costs one model call, and the router is mildly stochastic. Run each row once; do not retry failures until they pass, because a row that flickers is telling you its margin is thin, which is information you want surfaced (flag it), not noise you want suppressed.
+
+Step 1 is LLM work but not constitutional: generating twenty paraphrases and five boundary-crossing hard negatives per agent is exactly what a model is good at, and the labels attach mechanically because the ownership map decides them, not the generator. You can run this on demand before a repair session, or put it on the weekly clock next to the dependency audit: a scheduled headless job that generates a fresh batch, routes it, and opens an issue or PR listing any misroutes with suggested rows to add. That is safe unattended work because it only ever proposes.
+
+Step 3 is where automation must stop, for a reason the project has already committed to: descriptions live in .claude/agents/, every change there is constitutional, and the factory-engineer's own law says nothing it writes takes effect without human ratification. So the repair flow is: the runner (or the scheduled job) reports misroutes; you hand them to the factory-engineer as a work order ("these five rows misroute; propose description repairs per the meaning-space rules: artifact-name re-anchoring or contrastive sentences, both sides of each boundary"); it prepares the diff, runs the regression check as its verification tail, and stops; you ratify and restart. An automated pipeline that edits descriptions and merges them on green would be optimizing the router's behavior with no human in the loop, which fails the worst-possible-moment test from the safety section: descriptions steer which agent gets invoked, so silently drifting descriptions are silently drifting authority.
+
+Step 5 stays with you for a quieter reason: the stopping rule ("a fresh generated batch produces no new misroutes") and the tolerance decision ("this residual row is inherently ambiguous; we accept it and route it explicitly when it occurs") are quality judgments about how much routing precision the team needs, and they trade against corpus size and run cost. A rule of thumb for cadence: run the suite automatically on every description diff; regenerate a fresh batch and do a full loop pass after any model upgrade, after adding an agent, and otherwise about quarterly; and add observed misroutes as failing rows the moment they happen, regardless of schedule.
+
+Compressed to one sentence, the loop's instruments are scripts, its labor is an agent's, and its two irreversible acts (changing a description, declaring the fixpoint) are a human's; automate the first fully, schedule the second freely, and never automate the third.
+
 ### Wiring it into the factory
 
-Description changes are constitutional, so the loop belongs to the factory-engineer. Add one law and one verification step to its file (through the factory-engineer itself, ratified as usual):
+Description changes are constitutional, so the loop belongs to the factory-engineer. Add one law and one verification step to its file (through the factory-engineer itself, ratified as usual).
 
 ```markdown
 6. Descriptions are tested artifacts: any change to a description must keep
@@ -236,6 +475,14 @@ Description changes are constitutional, so the loop belongs to the factory-engin
 ```
 
 The pattern should look familiar: the failing row lands first, then the fix, exactly like the test-engineer's failing-test handoff. Descriptions get the same treatment as code because they are code: parameters of a stochastic router, with a test suite pinning the behavior you have paid to get right.
+
+The file is `.claude/agents/factory-engineer.md`, the factory-engineer's own definition. Concretely, the two snippets slot into the two existing numbered sections of that file, and their numbering was chosen to continue those sections.
+
+The first snippet (starting "6. Descriptions are tested artifacts...") appends to the `## Iron laws` section, which currently ends at law 5 (the floor invariants). After the edit, the section reads laws 1 through 6, with law 6 binding every future description change to the routing corpus: the suite must stay green, and a repaired misroute lands in `docs/routing-tests.md` as a failing row before the description changes.
+
+The second snippet (starting "6. Verify routing: run the routing suite...") appends to the `## Procedure` section, which currently ends at step 5 (the report). After the edit, the procedure has a sixth step: its verification tail now includes running the routing suite and reporting pass counts and repairs. This gives the factory-engineer what it previously lacked and every other agent already had: a mechanical check at the end of its own procedure that its work (in this case, descriptions) actually behaves.
+
+And note the deliberately recursive part of the instruction: because that file lives under `.claude/`, editing it is itself a constitutional change, which by the ownership map belongs to the factory-engineer. So the way you make this edit is to delegate it to the factory-engineer ("add law 6 and procedure step 6 by pasting the two snippets"); it edits its own definition, presents the diff, and stops; you ratify with commit plus session restart, after which the new law governs its next invocation. The agent amending its own constitution under human ratification is the normal evolution path for every file in `.claude/agents/`, including this one.
 
 ---
 
@@ -307,25 +554,134 @@ This table is the design of the whole agent system, written before any agent exi
 
 Goal: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
 
-Step 0.1. Start Claude Code in the empty repository:
+Here is the expanded Phase 0, paste-ready. It replaces everything from `## Phase 0: the seed agent` down to (but not including) `## Phase 1: the factory builds the factory`. The heading is unchanged, so the table-of-contents link keeps working.
+
+---
+
+## Phase 0: the seed agent
+
+Goal: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
+
+Step 0.1. Confirm the starting state. You are in the repository created at the end of Session 0. Check where you are and what exists:
+
+```bash
+pwd
+ls -la
+```
+
+Expected output: the path ends in `/taskforge`, and the directory contains nothing but git's own bookkeeping:
+
+```text
+/home/you/taskforge
+total 12
+drwxr-xr-x  3 you you 4096 .
+drwxr-xr-x 21 you you 4096 ..
+drwxr-xr-x  7 you you 4096 .git
+```
+
+No CLAUDE.md, no .claude directory, no source. This emptiness matters for what happens next: when Claude Code starts here, there is no project memory to load, no agents to route to, no hooks, and no permission lists. The session you are about to run is the only one in this entire tutorial that operates with none of the factory around it.
+
+Step 0.2. Start Claude Code in this directory:
 
 ```bash
 claude
 ```
 
-Step 0.2. Give this prompt, verbatim:
+What you will see: the interactive prompt opens, showing the working directory. If this is the first time Claude Code runs in this folder, it asks whether you trust the files in it; confirm. If you want to verify the empty starting state from inside, ask "what agents are available?" and expect only the built-in general-purpose behavior, with no project agents listed, because `.claude/agents/` does not exist yet.
+
+Step 0.3. Give the seed prompt, verbatim:
 
 > Create exactly one file, `.claude/agents/factory-engineer.md`, and nothing else: an agent whose job is to create and maintain the agent system itself (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json) from an authority matrix. Frontmatter: name factory-engineer; a routing-grade description ("Creates and maintains the agent system itself FROM SCRATCH... prepares constitutional diffs; never self-ratifies"); tools Read, Grep, Glob, Write, Edit, Bash. Body iron laws: (1) transcribe the authority matrix, never widen a fence or soften a law unless the matrix changed first; (2) every .claude/** change is constitutional: full diff plus justification, in force only after human ratification and restart, never self-approved; (3) least privilege by default: no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools; (4) channel discipline: timeless role files, universal facts to CLAUDE.md (at most 150 lines, at most 8 hard rules), one-run detail in task text; (5) floor invariants that may never be removed (guard patterns, stop_hook_active check, formatter exit 0, deny rules for terraform apply/destroy, force-push, .env reads). Procedure: read matrix, author files using the five-section skeleton with collision and orphan audits, validate mechanically (json parse, bash -n, chmod +x), present diff and stop. Print the full file content in your reply.
 
-Step 0.3. What happens, and why. There is no routing decision here: no agents exist yet, so the plain session simply executes a precise file-creation instruction. This is the one moment in the tutorial where behavior comes entirely from your prompt; from Phase 1 on, behavior comes mostly from agent files. That is why this prompt is so much longer than the ones that follow: it must carry both the specification and the discipline, because there is no agent file yet to carry the discipline.
+Step 0.4. What happens while it runs, and why. There is no routing decision here: no agents exist, so the plain session executes the instruction itself rather than delegating. It will propose one Write tool call, creating `.claude/agents/factory-engineer.md`. Because no `settings.json` exists yet, there is no allow list, so the CLI shows you an interactive approval prompt for that file creation; approve it. Nothing else fires: no PostToolUse formatter (no hooks exist), no Stop-hook check (no marker machinery exists). The session then prints the complete file content in its reply, because the prompt's last sentence demanded it; that printed copy is what you review in the next step without having to open the file. Note why this prompt is so much longer than every prompt that follows it: it must carry both the specification and the discipline, because there is no agent file yet to carry the discipline. From Phase 1 on, prompts shrink to specifications only.
 
-Step 0.4. Your gate. Compare the created file line by line against [Appendix A](#appendix-a-the-seed-agent-file), which contains the reference text. Pay closest attention to law 2 (never self-ratifies) and law 5 (floor invariants): these two lines are what make it safe to let this agent write all the others.
+What we see is the exact mechanics of how the model changes anything on your machine. The model itself cannot change your filesystem, it can only produce text. Claude Code turns some of that text into effects through a fixed set of tools: Read, Write, Edit, Bash, Grep, and so on. When the model wants to create a file, it does not somehow write bytes to disk; it emits a structured request, essentially a small typed message that says "invoke the tool named Write with these parameters":
 
-Step 0.5. Commit and restart, so the agent loads:
+```text
+Write(
+  file_path: ".claude/agents/factory-engineer.md",
+  content: "---\nname: factory-engineer\ndescription: Creates and maintains...\n..."
+)
+```
+
+That structured request is a tool call, and one Write call carries the complete file: the path and the entire content in a single invocation (as opposed to creating an empty file and growing it with many Edit calls). "One Write tool call" in the Phase 0 text means exactly that: the seed prompt's whole output is a single such request creating the one file whole.
+
+Emitting the request does not execute it, since the request goes to the Claude Code runtime, which decides what happens next, in three possible ways. If a permission rule in settings.json pre-approves this kind of call, the runtime executes it immediately. If a deny rule matches, the runtime refuses it, full stop. If neither matches, the runtime pauses and shows you an interactive approval prompt in the terminal, something shaped like:
+
+```text
+Claude wants to create a file:
+  .claude/agents/factory-engineer.md    (56 lines)
+[y] approve   [n] reject   (view diff)
+```
+
+Only when you approve does the runtime actually perform the write. Then it hands a result message back to the model ("file created"), and the model continues from there. So the full cycle is: model proposes, runtime consults permissions and hooks, human approves where required, runtime executes, result returns to the model. The model sits at the start of that chain and never at the end of it, which is why "propose" is the accurate verb everywhere in the tutorial: agents propose tool calls; the floor and you dispose of them.
+
+In Phase 0 specifically, the reason you are told to expect the interactive prompt is the empty starting state: no settings.json exists yet, so there is no allow list to pre-approve the write and no deny list to block anything. Every tool call in that session falls into the third case and comes to you for manual approval. That is also a nice one-time glimpse of the machinery: you see the raw approval flow exactly once, in the seed session, and then Phase 1 creates the permission lists that make routine calls (sbt, git add, file edits during genesis) flow without prompting while catastrophic ones become impossible. The same cycle is what the hooks instrument: PreToolUse runs after the model proposes and before the runtime executes (that is where the guard can exit 2 and block), and PostToolUse runs after execution (that is where the formatter fires). The tool call is the unit that the entire deterministic floor operates on.
+
+One more concrete detail worth knowing: everything an agent does is a sequence of these calls, visible in the transcript as it runs. When Phase 2 says the build-engineer "Writes the six files, then runs sbt Test/compile", what you literally watch in the terminal is six Write proposals followed by a Bash proposal with `command: "sbt Test/compile"`, each passing through the same propose, gate, execute, return cycle.
+
+Step 0.5. Verify the on-disk state. In the session, or from a second terminal in the same directory:
 
 ```bash
-git add -A && git commit -m "genesis 0: seed - factory-engineer"
+find . -type f -not -path './.git/*'
+```
+
+Expected output, exactly one line:
+
+```text
+./.claude/agents/factory-engineer.md
+```
+
+If more files appear (a README, a CLAUDE.md the session helpfully added), that is the helpfulness-bias failure mode: the prompt said "and nothing else", and anything else gets deleted now, in-session ("remove every file except .claude/agents/factory-engineer.md"). Then check the file's shape:
+
+```bash
+head -8 .claude/agents/factory-engineer.md
+wc -l .claude/agents/factory-engineer.md
+```
+
+Expected: the first line is `---`, followed by `name: factory-engineer`, a multi-line `description:`, a `tools:` line, and a closing `---`; total length roughly 50 to 60 lines. The two `---` fence lines are load-bearing: malformed frontmatter is the most common reason an agent silently fails to load later.
+
+Step 0.6. Your gate, the first constitutional review. Compare the file line by line against [Appendix A](#appendix-a-the-seed-agent-file). Wording may differ; substance may not. The specific checks, in order of importance: the `tools:` line reads exactly `Read, Grep, Glob, Write, Edit, Bash` (no MCP names, nothing omitted); law 2 contains both halves, ratification-before-effect and never-self-approved; law 5 lists the floor invariants it may never remove (guard patterns, stop_hook_active, formatter exit 0, the deny rules); the description contains "FROM SCRATCH" and "never self-ratifies"; and the boundaries name the four owners it must route to instead of acting (feature-implementer, build-engineer, db-migrator, infra-engineer). These lines are what make it safe to let this one agent write all the others; give them character-level attention.
+
+Step 0.7. Commit and restart, so the agent loads:
+
+```bash
+git add -A
+git status
+```
+
+Expected status: one new file staged, nothing else:
+
+```text
+Changes to be committed:
+  new file:   .claude/agents/factory-engineer.md
+```
+
+```bash
+git commit -m "genesis 0: seed - factory-engineer"
+```
+
+Expected commit output, one file, roughly fifty insertions:
+
+```text
+[main (root-commit) abc1234] genesis 0: seed - factory-engineer
+ 1 file changed, 56 insertions(+)
+```
+
+```bash
 exit
+claude
+```
+
+Agent definitions are read at session start, which is why the restart is part of the phase and not an optional flourish: the file you just ratified is inert in the old session and live in the new one. Verify the load in the fresh session by asking "what agents are available?" and expect factory-engineer, alone, in the list. End state of the repository: one commit, one file, one agent, and everything that follows flows through it.
+
+Failure branches. File created at the wrong path (`.claude/agents.md`, or `agents/factory-engineer.md` without the leading `.claude/`): ask the session to move it to the exact path and re-verify with find. Agent not listed after restart: either the path is wrong or the frontmatter fences are broken; check `head -1` prints `---` with no leading spaces. Session wrote a plausible but different agent (wrong tools, missing laws): do not edit it into shape by hand in fragments; re-run the seed prompt against the deleted file, because the prompt is cheap and the review against Appendix A is the gate that matters.
+
+Your gate is to compare the created file line by line against [Appendix A](#appendix-a-the-seed-agent-file), which contains the reference text. Pay closest attention to law 2 (never self-ratifies) and law 5 (floor invariants): these two lines are what make it safe to let this agent write all the others.
+
+Now, after exiting claude, restart, so the agent loads.
+
+```bash
 claude
 ```
 
@@ -356,7 +712,13 @@ exit
 claude
 ```
 
-Step 1.4. Probe the floor before trusting it. Mechanism you have not seen fire is mechanism you do not have. Run these three probes in the fresh session:
+To clarify, a session is one running invocation of `claude`: one process, one continuous conversation, one loaded configuration. Starting a new one does two separate things, and both matter for the probes. First, a fresh session re-reads the world from disk at startup. Agent definitions in `.claude/agents/`, the hooks and permission lists in `settings.json`, the MCP servers in `.mcp.json`, and CLAUDE.md are all loaded when the session starts. The session that wrote those files during Phase 1 was itself launched when none of them existed, so inside it the factory is just text it happens to have written: the ten agents are not registered, the guard hook is not wired, the permission lists are not in force. The exit-and-restart is what turns the ratified files from repository content into live machinery. This is also why the tutorial treats restart as the final step of every constitutional change, not as housekeeping: the factory-engineer's law says its diffs take effect only after "human ratification and restart", and the restart is the taking-effect.
+
+Second, a fresh session has an empty conversation, and that emptiness is what makes the probes honest. The probes are empirical tests of the runtime, and they can be corrupted from both directions by a stale conversation. In the old session, asking "what agents are available?" would produce a false answer in whichever direction you least expect: possibly a false negative (the runtime never loaded them, so nothing is listed even though the files are perfect), but just as dangerously a false positive, because that session's conversation memory contains the full text of all ten agents it just wrote, and a model asked about agents may helpfully answer from what it remembers writing rather than from what the runtime actually registered. You would read "yes, ten agents available" and learn nothing about whether the machinery works. The fresh session knows nothing except what loads from disk, so its answers can only come from the real registry, the real hook wiring, the real router. That is exactly what the three probes are designed to test: the listing probe checks the registry, the DROP TABLE probe checks that the guard hook actually fires (mechanism you have not seen fire is mechanism you do not have), and the build.sbt boundary probe checks that routing and the ownership boundaries govern a fresh context that never saw them written.
+
+For completeness, the neighboring terms the tutorial uses: "restart" is the pair exit-then-claude, and it is the act that completes ratification; "/clear" wipes the conversation within a running session; the tutorial's convention of one phase per session (fresh session or /clear between phases) uses it for context hygiene, so each phase starts with CLAUDE.md re-anchoring and no leftover discussion steering the model. But after constitutional changes specifically, the tutorial always says full restart, because the point there is configuration reload, not just a clean conversation. And note the distinction from subagent contexts: every delegation to an agent creates a fresh context for that agent automatically (Mechanism 2), no restart needed; "session" refers to the top-level conversation you type into, and it is the thing that must be born after the factory files exist in order to live under their government.
+
+Step 1.4. Probe the floor before trusting it. Mechanism you have not seen fire is mechanism you do not have. Run these three probes in the fresh session.
 
 ```text
 > what agents are available?
@@ -918,3 +1280,54 @@ Agent procedures must be idempotent so the re-run is safe by construction.
 ```
 
 ---
+Here it is as one single appendix section, no subsections, paste-ready.
+
+---
+<a name="appendixG"></a>
+## Appendix G: hooks and permissions, the deterministic floor
+
+Everything else in the agent system is text read by a model or an LLM, and a model follows text probabilistically: a well-written iron law gets 95% to 99% compliance, salience decays in long contexts, and a persuasive task prompt can outweigh a standing rule. For most rules that is acceptable, because violations are cheap to catch and undo. For a small set (dropping a production table, destroying infrastructure, finishing with untested changes) it is not, and those rules must not depend on the model at all. Hooks and permissions are how they stop depending on it: both run outside the model, as code, and code cannot be talked out of anything. They are called the floor because every agent stands on them equally; tool fences differ per agent, but the floor is one and global, and a rule enforced here binds the whole team at once, including agents that do not exist yet. The floor lives in one checked-in file, `.claude/settings.json`, with two parts as shown below.
+
+```json
+{
+  "permissions": {
+    "allow": [ "Bash(sbt *)", "Bash(git add *)", "Bash(git commit *)",
+               "Bash(docker build *)", "Bash(terraform plan *)",
+               "Bash(aws ecs describe-services *)", "Bash(aws logs tail *)" ],
+    "deny":  [ "Bash(terraform apply *)", "Bash(terraform destroy *)",
+               "Bash(git push --force *)", "Bash(aws rds delete-db-instance *)",
+               "Read(./.env)", "Read(./.env.*)" ]
+  },
+  "hooks": {
+    "PostToolUse": [ { "matcher": "Edit|Write",
+      "hooks": [ { "type": "command", "command": ".claude/hooks/format-scala.sh", "timeout": 120 } ] } ],
+    "PreToolUse":  [ { "matcher": "Bash",
+      "hooks": [ { "type": "command", "command": ".claude/hooks/guard-dangerous.sh", "timeout": 10 } ] } ],
+    "Stop":        [ { "matcher": "*",
+      "hooks": [ { "type": "command", "command": ".claude/hooks/verify-tests-ran.sh", "timeout": 10 } ] } ]
+  }
+}
+```
+
+Permissions carve every tool invocation into three zones. A rule has the shape Tool(pattern): tool name plus a glob over the argument (the command line for Bash, the path for Read). The allow list is the frictionless zone: routine, harmless verbs (build, test, git bookkeeping, image builds, read-only AWS queries, terraform plan) run without an approval prompt, both to keep agents flowing and to protect the human, because a person asked to approve fifty trivial commands learns to approve without reading, which destroys approval everywhere else. The deny list is the impossible zone: terraform apply and destroy, RDS deletion, force-push, and reads of .env files are refused no matter who asks or how the prompt is phrased, and deny beats allow on conflict. The .env rule has a second purpose: a secret that never enters the model's context can never surface in its output. Everything matching neither list falls to the third zone, the interactive approval prompt, which the two lists deliberately keep small enough that a human reads each one with attention. The design in one line: frictionless safe path, impossible catastrophic path, human friction only in the judgment-requiring middle.
+
+In the tutorial's vocabulary, the floor is specifically hooks plus permissions (the contents of `.claude/settings.json` and the hook scripts), not CLAUDE.md. The two share one property and differ on the one that matters. They share universality. CLAUDE.md is loaded into every context, and the floor applies to every tool call, so both bind all ten agents plus the orchestrator equally. That is the property the phrase "every agent stands on them equally" points at, and reading it as a description of CLAUDE.md is natural, because CLAUDE.md fits it too.
+
+They differ in what they are made of. CLAUDE.md is shared text, read by the LLM and followed probabilistically; a sufficiently persuasive prompt, a long context, or plain salience decay can defeat any sentence in it. The floor is shared code, executed by the runtime before, after, and around the model's tool calls; no wording anywhere can defeat it. That difference is the entire reason the floor exists as a separate concept: it is the layer that still holds when the text layer fails. The metaphor is chosen for exactly that: a floor is what you land on when everything above gives way.
+
+The cleanest way to hold all the pieces is a two-by-two, since the system's four control surfaces are just the crossings of two axes, shared versus per-agent and text versus code:
+
+| | Text (LLM reads it, persuadable) | Code (runtime executes it, not persuadable) |
+|---|---|---|
+| Shared by everyone | CLAUDE.md, the constitution | permissions and hooks, the floor |
+| Per agent | the agent body (laws, procedure) | the tools fence in frontmatter |
+
+So CLAUDE.md and the floor are vertical neighbors (both shared), while CLAUDE.md and the agent bodies are horizontal neighbors (both text). The tutorial's names keep them apart: constitution and memory for the shared text, floor for the shared code, fence for the per-agent code.
+
+If the sentence misled you, it will mislead other readers; a one-word patch fixes it. Change "they are called the floor because every agent stands on them equally" to something like: "they are called the floor because they sit beneath every agent: shared like CLAUDE.md, but made of code the model cannot argue with, which is what holds when instructions fail." That keeps the metaphor and removes the ambiguity.
+
+Hooks are external scripts run at fixed lifecycle moments: PreToolUse before a tool call executes, PostToolUse after it completes, Stop when an agent tries to finish; the matcher selects which tool calls trigger them. The execution contract: the hook receives a JSON payload on stdin (tool name, full tool input, event name, and for Stop hooks a stop_hook_active flag); exit 0 means proceed; exit 2 means block, with whatever the hook wrote to stderr fed back to the model; any other exit is a non-blocking error. The stderr channel is the underappreciated part: the message is an instruction injected at exactly the right moment, and its quality decides what happens next. A bare "blocked" produces a retry loop; "Blocked: matches forbidden pattern 'DROP TABLE'; if this is really needed, a human must run it manually" produces routing. Write every blocking message as a course-correction naming the legitimate alternative.
+
+The three hooks in this project are the three archetypes, each a hook rather than a sentence for a stated reason. The normalizer (format-scala.sh, PostToolUse on Edit|Write) formats the one touched Scala file and always exits 0: instruction-level formatting compliance runs about 95 percent, and the missing 5 percent becomes diff noise polluting every later review; conveniences never block, so its failures are swallowed. The guard (guard-dangerous.sh, PreToolUse on Bash) matches the actual command string, case-insensitively, against a pattern list (DROP TABLE, TRUNCATE, terraform destroy, rm -rf /, force-delete flags) and exits 2 on a hit. It exists alongside the deny list because the two match different things: permission globs match the shape of an invocation, anchored at the front, while the guard reads the whole string, where a destructive statement can hide inside psql -c "..." or a heredoc; two nets with different weaves catch different fish, and every incident that reveals a new dangerous shape adds a pattern here. The completion gate (verify-tests-ran.sh, Stop) first exits 0 if stop_hook_active is set, the mandatory loop guard, since the runtime sets that flag on the continuation a previous block caused. Then, if git diff shows changed .scala files newer than the marker file .claude/.last-test-run (touched by the markTestRun task at the end of the sbt check alias, so the build itself writes the evidence and no log parsing is needed), it exits 2 with "Run sbt check and fix any failures before finishing": the definition of done as a precondition of stopping rather than a request.
+
+The floor composes with the other mechanisms as the middle layers of a four-layer stack, each catching what the previous cannot: the tool fence (agent frontmatter) removes whole capability classes, permissions block invocation shapes, hooks inspect semantic content and lifecycle conditions, and instructions carry everything that requires judgment, the only persuadable layer. The sorting rule for where any given rule belongs: if 95 percent compliance is acceptable, it stays prose with a named detection (a reviewer axis, a CI step); if 95 percent is a disaster, it goes into the floor. Two operational facts complete the picture. The floor fails silently (a mistyped matcher matches nothing, a hook without its executable bit never runs, and nothing tells you), so it is verified empirically, never by reading: probe the guard with echo 'DROP TABLE tasks' and watch it block, trip the Stop hook once on purpose, and repeat both after any change to settings.json; mechanism you have not seen fire is mechanism you do not have. And the floor is constitutional: settings.json and the hook scripts belong to the factory-engineer, whose own laws forbid removing the guard patterns, the stop_hook_active check, or the deny rules, so any weakening diff requires human ratification. The floor protects the agents from their failure modes; the ratification gate protects the floor from the agents.
