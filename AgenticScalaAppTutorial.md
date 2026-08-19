@@ -34,7 +34,27 @@ In this tutorial we explain how to create the following components.
 1. An agent system (the "factory"): ten Claude Code subagents, a project memory file, three safety hooks, a permission policy, and MCP server wiring. All of it lives in ordinary files in the repository.
 2. The application, produced by that agent system phase by phase: build definition, domain model, database schema and access layer, business rules, HTTP API and browser frontend, test suites, Terraform for AWS, deploy scripts, and GitHub Actions workflows.
 
-The ten agents and what each one owns:
+The orchestrator is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
+
+| | Orchestrator | Subagent |
+|---|---|---|
+| Defined by | nothing; it is the default session | one file in .claude/agents/ |
+| Context | persists across the whole session; accumulates the plan, all reports, your decisions | fresh per invocation; sees only its file, CLAUDE.md, and the work order |
+| Tools | the full default set, bounded only by the floor | its fence |
+| Can delegate | yes; it is the only party that can | no; subagents cannot invoke each other |
+| Talks to you | continuously | never; it returns one report, to the orchestrator |
+| Plan mode | available; the convention is planning starts there | not applicable |
+
+Its function in the workflow is the hub of the W-chain in diagram 4. You give intent (W1); the orchestrator plans, ideally in plan mode where it can read everything but change nothing; then it issues work orders in sequence (W2 through W9), each addressed to the owner from the ownership map, each carrying the specifics of this one job plus any prior report pasted in, because pasted reports are the only memory that crosses between agents. It runs the BLOCKED-ON repair loop when an agent stops on a missing dependency: read the report, route the evidence to the owning agent, gate the fix, re-run the blocked agent fresh. And it synthesizes outcomes back to you. The working analogy is a general contractor or an engineering manager: it holds the whole story, judges and routes, and does no specialty work itself.
+
+Why the design needs such a thing at all comes down to two asymmetries. First, breadth versus narrowness: planning requires seeing the whole repository, your intent, and every report at once, while executing requires a narrow, clean context; the orchestrator is where the breadth deliberately lives, and it is the reason subagent contexts can afford to be narrow. Second, auditability: subagents routing work directly to each other would dissolve the trail and let one misjudgment cascade unsupervised, so the topology is hub and spoke, with every hop passing through the one context you can watch.
+
+What governs it, given that it has no fence file: three things. CLAUDE.md loads into it like into everyone, and the ownership hard rule binds it explicitly; this matters because the orchestrator holds broad tools, so its standing temptation is to just do the work inline (write the code, edit the build) instead of delegating, which would quietly make it an unaccountable eleventh owner. The floor applies to it fully; hooks and permission rules do not distinguish orchestrator from subagent tool calls. And the authority matrix gives it a row of its own: it may plan, decompose, delegate, paste reports, and run the repair loop; it must never perform a specialty inline or bypass an owner; it escalates routing ambiguities and matrix gaps to you.
+
+Two clarifications that resolve most confusions about it. The orchestrator is a role, not a persistent entity: each new session (and the tutorial's convention is one phase per session) births a fresh orchestrator, re-anchored by CLAUDE.md, with no memory of previous sessions except what the repository and your prompts carry. And it is the same base model as every agent it delegates to; the difference between the orchestrator and, say, the feature-implementer is not intelligence or identity but constraint: one is the model with the whole conversation and no role file, the other is the same model with a fresh context, a system prompt, and a fence. In this system, who you are is what loads around you. 
+
+### Ownership matrix and the agentic workflow
+The ten agents and what each one owns are specified in an ownership table below, created by a human architect who knows what agents are needed. This table answers one question per agent: what does it create and own? That is the "may" side of authority, restricted to artifact creation.
 
 | Agent | Creates and owns |
 |---|---|
@@ -49,18 +69,78 @@ The ten agents and what each one owns:
 | incident-responder | diagnosis and incident reports in docs/incidents |
 | dependency-updater | version numbers in the build's version ledger, on a weekly schedule |
 
-The rule that makes the whole design work: every artifact class has exactly one owning agent, and an agent asked to touch another agent's artifact declines and names the owner. You will see this rule fire in practice in [Phase 1](#phase-1-the-factory-builds-the-factory), probe 3.
+When you create the ownership table you are answering the chief architect's classic questions. 
+- What jobs does this project contain? 
+- Where do I draw responsibility boundaries? 
+- Do I want one full-stack generalist or specialists? 
+- Should the person who writes the code be the person who reviews it (no)? 
+
+The split tests from the tutorial are hiring logic in disguise: different tools means a different role, checker and checked must be different people, high-blast-radius duties get isolated into their own position, and scheduled work gets its own description. Even the anti-split test is a headcount instinct: do not create two positions that would share ninety percent of a job description. And the routing descriptions are literally job postings written so work finds the right desk.
+
+However, you are not selecting workers for hire; you are authoring them. Hiring is choosing among pre-existing people with fixed skills, habits, and personalities you can only discover, never specify. Here every candidate is the same base model, and the job description is not a filter for the worker; it is the worker. There is no interview because there is no variance in the candidate; all the variance is in your specification. Consequence: competence is not what you design for (it comes with the model, uniformly), scope and constraint are. A bad hire is a selection error; a bad agent is a writing error, and it is always yours.
+
+Moreover, your employees are amnesiac, so the institution's memory must be externalized. A human hire accumulates context, learns the codebase, remembers last month's incident. An agent starts blank every single invocation. So "staffing" here includes building what human organizations get biologically for free: CLAUDE.md is institutional memory, reports-pasted-forward are meetings, docs/agents.md is the org chart everyone actually reads. A chief architect hires people and culture grows; you must write the culture down or it does not exist.
+
+Next, the enforcement model inverts. With humans, a job description states duties, and enforcement is soft and social: performance reviews, professional norms, the fact that people push back on bad orders and have self-preservation. Agents comply eagerly with almost anything, including bad ideas, so limits cannot be normative; they must be structural. That is why the ownership table does not stay a duties document but compiles down into fences, permission rules, and hooks. The nearest human-world artifact is not an org chart at all; it is an RBAC security policy. Hiring trusts judgment; this system trusts mechanism, and never the worker: you trust the gates and oracles around the agent, the way you would never operate with a human colleague you respected.
+
+In addition and crucially, the economics invert too. A human specialist costs a salary, so no sane architect hires a full-time "db-migrator" for a small product; roles get bundled because headcount is expensive. Agent roles cost nothing marginal to employ, so specialization is nearly free, and the real costs move elsewhere: every extra role adds routing surface (one more description that can misroute) and definition maintenance (one more file that can go stale). Ten specialists for a small app would be organizational malpractice with humans and is ordinary design here.
+
+Finally, these ten employees are the same mind wearing different constraints. When a chief architect separates implementer from reviewer, independence comes free, from two different brains with different blind spots. Here the reviewer is the same model as the implementer, so independence must be manufactured: fresh contexts, adversarial framing in the reviewer's file, the no-write fence. The separation of duties that hiring gets by nature, you get only by engineering, which is why the tutorial spends so many words on it.
+
+Therefore, the ownership table is the org chart and _Responsible, Accountable, Consulted, and Informed (RACI)_ matrix of a team you author rather than hire, whose members forget everything between shifts, comply with anything, cost nothing to multiply, and are all the same person. The authority matrix is that org chart fused with the security policy, because for this kind of employee the two documents cannot be separate. Where the analogy is most exact is the moment before any of that: deciding what jobs the work actually divides into. That decision is identical in both worlds, and the tutorial's claim stands in both too: delegation forces the explicitness that human teams fake with tribal knowledge. The difference is that a human team survives your vagueness, and this one turns it directly into behavior.
+
+The rule that makes the whole design work is the following: every artifact class has exactly one owning agent, and an agent asked to touch another agent's artifact declines and names the owner. You will see this rule fire in practice in [Phase 1](#phase-1-the-factory-builds-the-factory), probe 3.
+![img_1.png](img_1.png)
+
+
+---
+
+### The authority matrix
+
+The authority matrix is the single design document from which the entire agent system is derived. It is written by the human architect, on paper, before any agent exists; it is serialized into the Phase 1 prompt as the factory-engineer's input; its ratified on-disk form becomes docs/agents.md; and forever after it is the reference against which every constitutional diff is judged. One row per actor, four questions per row: what may it do on its own, what must it never do, what must it escalate and in what form, and which mechanism enforces each limit. The fifth column here names where each row's content lands in the built system, so you can trace every cell to a file.
+
+| Actor                       | May do autonomously | Must never | Must escalate (and the artifact) | Enforced by |
+|-----------------------------|---|---|---|---|
+| You (the architect)         | everything; in practice: prompts, constitutional ratification, terraform apply, PR merges, destructive-DDL sign-off | (self-binding) hand-edit agent-owned artifacts outside the gates | nothing; escalations terminate here | convention plus git history, which makes hand edits visible |
+| Orchestrator (main session) | plan in plan mode; decompose; delegate to owners; paste reports forward; run the BLOCKED-ON repair loop; run pre-approved commands | do a specialty inline; bypass an owning agent; treat its own judgment as ratification | routing ambiguities and matrix gaps, to you | CLAUDE.md ownership law; reviewer detection; permission lists |
+| factory-engineer            | draft CLAUDE.md, docs/agents.md, .claude/agents/*, hooks, settings.json, commands, .mcp.json | self-ratify; widen a fence or soften a law without a prior matrix change; remove floor invariants | every constitutional diff: full diff plus per-file matrix justification, then stop | its laws 1, 2, 5; your ratification gate plus restart; reviewer ownership axis |
+| build-engineer              | create and restructure build.sbt, project/*, .scalafmt.conf, docker-compose.yml, .gitignore; run sbt | write application source; bump dependency versions; touch infra or .claude | resolver failures it cannot pin; any request adding a build environment input, as a report | instruction plus reviewer detection; sbt check as verification |
+| dependency-updater          | bump versions in the ledger, plugin versions, sbt.version; research advisories; run sbt check; open the upgrade PR | structural build changes; major bumps; forcing a red build; creating files | major upgrades, as a written migration analysis; failed bumps, reverted and reported | Edit-but-not-Write fence; instruction; CI plus your merge gate |
+| feature-implementer         | edit src/**; run sbt; write feature tests | deploy; author migrations; edit build.sbt or project/*; touch .claude or infra | schema needs, to db-migrator; dependency needs, as coordinates plus justification for build-engineer | fence (no cloud or MCP tools); its laws 5 and 6; reviewer detection |
+| test-engineer               | add and modify tests under src/test; run sbt test | touch production code; bend a failing test to match a bug | production bugs it finds: the failing test stays red plus a report | instruction plus reviewer path check; the failing-test handoff rule |
+| code-reviewer               | read everything; run build and tests as evidence; report ranked, verified findings | edit anything; approve its own suggestions into the tree | nothing; it only reports (APPROVE or REQUEST_CHANGES) | fence: no Edit, no Write; Bash residue covered by permissions, hooks, and git diff visibility |
+| db-migrator                 | author new V*.sql; inspect the live schema through the read-only postgres tool; verify against the compose database | edit an applied migration; execute destructive DDL | destructive DDL: the prepared migration plus blast-radius and rollback analysis, then stop | server-level read-only MCP; guard hook (DROP, TRUNCATE); reviewer auto-critical on V*.sql edits |
+| infra-engineer              | author infra/terraform, scripts/*.sh, .github/workflows; terraform validate and plan; read live AWS state | terraform apply; run deploys, rollbacks, or smoke tests against live environments; touch app or build source | stateful-resource replacement: the plan with those lines reported first, for your sign-off | deny rules (apply, destroy); its law 4; reviewer detection |
+| deploy-engineer             | execute deploy.sh, rollback.sh, smoke-test.sh; watch ECS rollouts; verify the landed revision | deploy on red tests; force anything; author or edit the scripts it runs; touch terraform state | repeated gate failures: an evidence dossier with stopped-task reasons captured before rollback | permission denies (force-push); the scripts' own coded gates; separation of powers with infra-engineer |
+| incident-responder          | diagnose read-only; restart tasks; run rollback.sh when the current deploy is the proximate cause; scale desired count within 1 to 4 | repair data; roll back schema; make security changes; exceed the scaling bounds | data, schema, or security findings: an evidence dossier; and any investigation past 15 minutes without a credible hypothesis | read-only MCP tools; guard hook; instruction with timebox; escalation artifact defined |
+
+#### How to read the columns
+
+The May column is the autonomy grant, and it is governed by one test: reversibility. Everything in that column is either reversible (a restart, a rollback, a draft in a working tree) or gated downstream by something else in the system (a deploy passes coded gates; a PR awaits your merge). If an action has no undo and no downstream gate, it does not belong in this column for any agent.
+
+The Must-never column is the prohibition set, and its discipline is that every entry must also appear in the Enforced-by column with a mechanism attached. A prohibition with no enforcement plan is a hope, and the matrix format makes hopes visible as empty cells. When you cannot enforce a prohibition at the strength you want (the recurring example: any agent holding Bash can in principle write files), the Enforced-by cell records the honest, layered answer rather than a comfortable fiction.
+
+The Must-escalate column is not a weaker must-never; it is a different thing: work the agent should do up to a defined stopping point, with a defined artifact to hand over. Every cell in it names the artifact (a prepared migration plus analysis, a plan with stateful lines first, an evidence dossier, a written migration analysis), because an agent without a dignified way to stop will improvise a way to proceed. The artifact is the dignified stop.
+
+The Enforced-by column is the enforcement ladder made explicit, strongest rung first where multiple apply: tool fence (capability absent), then permission rules and hooks (deterministic, argument-aware), then instruction with a named detection (a reviewer axis, CI, git visibility). Reading down this column tells you where the system's safety is physics and where it is discipline, which is exactly what you need to know when deciding how much to trust an unattended run.
+
+#### The semantics of each row
+
+The two human-side rows exist to make the power structure complete rather than implied. Your row is special: nothing enforces it except your own consistency and the visibility git gives to violations, and the single self-binding rule (no hand edits outside the gates) is what keeps the ownership invariant true, since you are the only actor no fence can stop. The orchestrator's row prevents the subtle failure where the main session, which holds broad tools, quietly becomes an eleventh owner doing everyone's job inline; its must-never cell is the ownership law seen from the dispatcher's side.
+
+The factory-engineer's row is the most consequential: it holds drafting authority over everyone else's authority, so its own row is dominated by self-limitation, and all three of its limit cells point at the same gate, your ratification plus a restart. The build-engineer and dependency-updater rows split one file two ways, structure versus versions, which is why each one's must-never cell names the other's territory. The implementer and test-engineer rows encode the writer-checker separation on the code side; the reviewer's row encodes it universally, with the only all-caps-strength fence in the system (no write tools at all). The db-migrator's row is shaped by irreversibility under rolling deploys; the infra-engineer and deploy-engineer rows are shaped by separation of powers (one authors the deploy machinery, the other operates it, neither does both); and the incident-responder's row is the fullest example of graduated autonomy, with numeric bounds (scale 1 to 4, 15 minutes) because unattended judgment needs numbers, not adjectives.
+
+### How the matrix is used
+
+Four uses, at four moments. At genesis, it is serialized into the Phase 1 prompt as the factory-engineer's input, and the Phase 1 gate is you checking the generated files against it row by row. In steady state, it is the reference for every constitutional diff: a proposed change to any agent file must cite the matrix row that justifies it, and if no row does, the matrix must be amended first, in the same ratified change, so authority never drifts ahead of its specification. For testing, it is the source of red-team probes: every must-never cell is one probe (invite the violation, expect refusal), and every must-escalate cell is another (trigger the condition, expect the artifact and a stop). And for evolution, it is the thing you actually reason about when someone proposes restructuring the team: merges and splits are evaluated as matrix operations (can these two rows share cells without breaking one-writer or writer-checker?) before any file is touched.
+
+Two invariants should hold across the whole table whenever you amend it, and they are checkable by inspection: every artifact class in the repository appears in exactly one row's May column (one writer), and no row contains both write authority over an artifact class and the duty to check that same class (writer-checker separation). If an amendment breaks either, the amendment is wrong, not the invariant.
 
 ## 2. How agent instructions become actions
 
-The AI agentic system is shown in five small diagrams: ownership, the floor and its
-standing gates, proposal and disposal, the operational workflow, and the runtime paths
-with their feedback loops. Node border colors identify the kind of node (violet: human
-side; blue: agent; orange: constitution and floor; amber: repository artifact; green: AWS
-runtime); fills stay neutral. Solid arrows mean creates, owns, or executes; dashed arrows
-mean gates, reads, or bounded writes. A rendered version of all five is agent-graph.html.
+The AI agentic system is shown in five small diagrams: ownership, the floor and its standing gates, proposal and disposal, the operational workflow, and the runtime paths with their feedback loops. Node border colors identify the kind of node (violet: human side; blue: agent; orange: constitution and floor; amber: repository artifact; green: AWS runtime); fills stay neutral. Solid arrows mean creates, owns, or executes; dashed arrows mean gates, reads, or bounded writes. A rendered version of all five is agent-graph.html.
 
-#### Ownership: one writer per artifact class
+#### Diagram 1: Ownership with one writer per artifact class
 
 Each agent's solid arrow points at the one artifact class it creates and owns. The two
 dashed arrows are the only bounded exceptions: version bumps into the build ledger, and
@@ -117,7 +197,7 @@ flowchart LR
 The code-reviewer is absent here on purpose: it owns nothing, which is its design (no
 write tools). It appears in the next diagram, where its work lives.
 
-#### The floor and the standing gates
+#### Diagram 2: The floor and the standing gates
 
 What constrains every change, all the time, regardless of who makes it. The constitution
 and floor load into every agent context; the two hooks act on every tool call and every
@@ -149,7 +229,7 @@ flowchart LR
   class CTX,DIFF artifact
 ```
 
-#### Proposal and disposal: what agents produce, what only you enact
+#### Diagram 3: Proposal and disposal - what agents produce, what only you enact
 
 Every irreversible or authority-changing act is split in two: an agent produces an inert
 proposal, and a specific human action turns it into reality. If you do nothing, nothing
@@ -177,7 +257,7 @@ flowchart LR
   style PR fill:#fcfcfb,stroke:#d8d7d0
 ```
 
-#### The operational workflow
+#### Diagram 4: The operational workflow
 
 The numbered delegation order. W1 to W9 is the build and release path; every agent's
 report returns to the orchestrator (drawn once as the reports edge). The two standing
@@ -212,7 +292,7 @@ flowchart LR
   class FE,BE,DM,FI,TE,CR,IE,DE agent
 ```
 
-#### Runtime paths and the two feedback loops
+#### Diagram 5: Runtime paths and the two feedback loops
 
 How repository artifacts become a running system, and how the running system feeds work
 back: alarms drive the incident path (W10), and the weekly cron drives maintenance (W11).
@@ -255,9 +335,11 @@ can escape; diagram 3 is where human authority concentrates; diagram 4 is the or
 flows; diagram 5 is how the deployed system pulls the loop closed by generating the next
 round of work. We need this mental model before Phase 0, because every "what happens" section later refers to it. 
 
-### There are five mechanisms.
+### Mechanisms as built-in cause-and-effect pathways that operate the same way every time
 
-Mechanism 1: routing by description. A subagent is one markdown file in `.claude/agents/<name>.md` with YAML frontmatter. When your prompt says "Use the build-engineer agent to create the sbt build", Claude Code looks up the agent by name; when your prompt merely describes work ("set up the build for this project"), Claude Code matches your words against every agent's `description` field and picks the best fit. This is why every description in this project contains the phrase "Use for ..." followed by trigger words: descriptions are routing patterns , not documentation. More discussion on maximizing routing efficacy is  in [Appendix E](#appendix-e-routing-in-meaning-space).
+The word *mechanism* means a fixed piece of causal machinery in the runtime: a built-in cause-and-effect pathway that operates the same way every time, whether or not anyone intends it, remembers it, or agrees with it. A mechanism is a gear, not a signpost or an empty declaration like All Lives Matter! The contrast class is convention, advice, or policy: "one phase per session" is a convention you follow; "the Stop hook exits 2 if tests did not run" is a mechanism that fires whether you follow anything or not. Section 2 lists five because those five are the complete causal inventory of the system: every behavior you will ever observe in the tutorial traces back to exactly one of them. Routing by description is the machinery that selects which agent runs; the fresh context is the machinery that determines what the selected agent knows; the tool fence is the machinery that bounds what it can do; the instruction hierarchy inside the file is the machinery that shapes how it works; hooks and permissions are the machinery that constrains every act regardless of everything above. The phrase "and only five" is doing real work: it hands you a debugging ontology. When something surprising happens, the diagnostic question is always "which of the five produced this?", and there is no sixth place to look. One refinement worth holding: the five are not equally deterministic. Fences, hooks, and permissions are mechanisms in the strictest sense, code with guaranteed outcomes. Routing and instruction-following run through the model, so they are statistical mechanisms: defined pathways with known operating characteristics but probabilistic output, which is exactly why the tutorial builds tests around them (the routing corpus) and backstops them with the deterministic three. Calling all five "mechanisms" is still right, because in every case the behavior flows through a nameable, inspectable pathway you can engineer, rather than through vibes.
+
+**Mechanism 1: routing by description**. A subagent is one markdown file in `.claude/agents/<name>.md` with YAML frontmatter. When your prompt says "Use the build-engineer agent to create the sbt build", Claude Code looks up the agent by name; when your prompt merely describes work ("set up the build for this project"), Claude Code matches your words against every agent's `description` field and picks the best fit. This is why every description in this project contains the phrase "Use for ..." followed by trigger words: descriptions are routing patterns , not documentation. More discussion on maximizing routing efficacy is  in [Appendix E](#appendix-e-routing-in-meaning-space).
 
 The first hard rule: write the description in the vocabulary of arriving tasks. Routing is word matching, so the words must be the ones a request will actually contain. A request will say "add a dependency", "set up the build", "the deploy failed", "alarm is firing"; it will not say "leverage build lifecycle expertise". Compare a description that routes, e.g., "Creates the sbt build and project scaffolding FROM SCRATCH... Use for ANY change to build.sbt, project/*, .scalafmt.conf..." with one that does not, e.g., "Responsible for build engineering excellence and project setup best practices and DEI affirmative actions". The second is not wrong as prose; it is wrong as a pattern, because none of its words appear in real requests. A useful drafting technique is to write five requests you expect this agent to receive, then check that every content word those requests share appears in the description.
 
@@ -350,11 +432,25 @@ The general test, which you can apply mechanically to all ten descriptions at on
 
 The sixth hard rule: audit the set, then test it empirically, and fix failures in the description rather than in your prompts. The collision audit: write ten realistic requests, assign each to an agent by hand, then check that no request's wording plausibly matches two descriptions; where it does, sharpen the trigger clauses until exactly one wins. The orphan audit: check that every lifecycle stage's natural vocabulary appears in some description; a stage that matches nothing will be handled inline by the orchestrator, which means by nobody with laws. Then probe live: phrase a request without naming any agent and see who picks it up. If the wrong agent answers, the temptation is to just name the right agent in future prompts. Resist it; explicit naming is a workaround that lives in your head, while a corrected description is a fix that works for every future session, every teammate, and every scheduled run where nobody is present to name anyone.
 
-Mechanism 2: the fresh context. When an agent is invoked, the runtime assembles a new context containing three things only: the agent file's body (which becomes its system prompt), the project memory (CLAUDE.md plus files it imports), and your task prompt. The agent does not see your conversation, other agents' work, or its own previous runs. Consequence: anything an agent must always know has to be in its file or in CLAUDE.md, and anything one agent must tell another has to travel through your prompts (you paste report text forward). For dependencies between agents read [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
+**Mechanism 2: the fresh context**. When an agent is invoked, the runtime assembles a new context containing three things only: the agent file's body (which becomes its system prompt), the project memory (CLAUDE.md plus files it imports), and your task prompt. The agent does not see your conversation, other agents' work, or its own previous runs. Consequence: anything an agent must always know has to be in its file or in CLAUDE.md, and anything one agent must tell another has to travel through your prompts (you paste report text forward). For dependencies between agents read [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
 
-Mechanism 3: the tool fence. The frontmatter `tools:` list is enforced by the runtime. The code-reviewer's list contains no Edit and no Write, so it cannot modify files no matter what anyone types. When a phase below says "the agent cannot do X", this is usually the mechanism.
+**Mechanism 3: the tool fence**. The frontmatter `tools:` list is enforced by the runtime. The code-reviewer's list contains no Edit and no Write, so it cannot modify files no matter what anyone types. When a phase below says "the agent cannot do X", this is usually the mechanism.
 
-Mechanism 4: the instruction hierarchy inside the file. Each agent body in this project has five sections, and each section drives a different observable behavior.
+The tool fence is one line of YAML, and it is the strongest single instrument the workflow writer has, so it repays knowing precisely. What the writer needs to know falls into six parts: what enforcement means, the trap in the default, what the fence can and cannot express, how to derive it, the one honest caveat about Bash, and how to verify and change it.
+
+What enforcement actually means. When the runtime spawns a subagent, it reads the frontmatter `tools:` list and offers the model only those tools. A tool absent from the list does not exist in that context: it is not shown to the model, the model cannot propose a call to it, and a hallucinated call to an absent tool fails at the runtime with an unknown-tool error rather than executing. This is enforcement by absence, which is categorically different from the other mechanisms: permissions and hooks filter invocations of tools the agent has; the fence removes whole capabilities so there is nothing to filter. An instruction says "do not edit"; the fence arranges that there is no edit to do. That difference is why the enforcement ladder puts the fence at the top: it is the only rung where violation is not merely blocked but inexpressible.
+
+The trap in the default. An omitted `tools:` field does not mean no tools; it means all tools, everything the parent session has, including every connected MCP tool. This inverts the safe intuition (usually omitting a grant denies it), and it turns a careless deletion of one line into the widest possible agent. Two consequences for the writer: never omit the field, in any agent, ever, and treat any diff that touches a `tools:` line as an authority change requiring the matrix to change first. The factory-engineer's own laws encode both.
+
+What the fence can and cannot express. The unit of the fence is a whole tool. It can distinguish surprisingly finely at that level: Read, Grep, Glob are the perception bundle nearly every agent gets; Edit and Write are separate tools, and the difference is usable (the dependency-updater has Edit but not Write: it can modify existing build files but cannot create new ones, which fences "bump a version" apart from "add a file" at the capability level); WebSearch and WebFetch are granted only where the role is research, because research tools invite unrequested research; and MCP tools are named individually (`mcp__postgres__run_query`), so granting capability and granting access are the same act. What the fence cannot express is anything inside a tool's argument space: it cannot say "Write, but only under src/test" or "Bash, but only sbt". Those constraints drop down the ladder, to permission rules and hooks (deterministic, argument-aware) or to instruction plus detection (the test-engineer's src/test-only rule is prose, and the reviewer checks every diff's paths). The writer's discipline is to know, for every constraint in the authority matrix, which rung it lives on, and to write it there rather than wishing the fence could hold it.
+
+How to derive a fence. Mechanically, from the matrix's MAY column: list the tool calls the agent's procedure actually makes, grant exactly those, stop. The reviewer's procedure reads diffs and runs sbt as evidence: Read, Grep, Glob, Bash, and pointedly no Edit or Write. The migrator writes migration files and inspects the live schema: add Write and the one MCP read tool. If you cannot name the procedure step that needs a tool, the tool goes; if the agent later fails for lack of it, that failure is loud and cheap (an unknown-tool error and a report), while the opposite error, a grant without a need, is silent standing risk. Over-fencing has a real failure mode worth knowing: an agent whose procedure requires a verification step it lacks the tool for will either thrash or skip verification, so always check the fence against the agent's own procedure section, tool by tool.
+
+The honest caveat: Bash is a superset. A shell can create files (`echo > file`), fetch URLs (`curl`), and generally reach most of what the other tools do. So "no Edit, no Write, but Bash granted" does not make writing physically impossible; it removes the legitimate write path, which changes the violation from invisible to anomalous. The residue is covered by the layers below: permission rules and the guard hook see every Bash command string, git diff makes any file the reviewer somehow wrote immediately visible as an anomaly in its own review, and the instruction "you never edit files" stands. The writer must hold this honestly: the fence's guarantee is absolute only for tool-shaped access; where Bash is present, the guarantee is fence plus floor plus evidence, not fence alone. If a role must be absolutely read-only, drop Bash too, and accept the trade (the reviewer would lose the ability to run the build as evidence). This project keeps Bash on the reviewer and accepts the layered guarantee, and that is a design decision you should make consciously, not by default.
+
+Verification and change control. Fences are configuration, and configuration is verified empirically: ask a new agent to do the thing it must not ("edit this file" to the reviewer) and expect a refusal that cites inability, not politeness; ask it to list its available tools and compare against the frontmatter; after any MCP server change, re-probe agents that hold MCP names, because a renamed server silently renames its tools and the agent loses the capability without any error at load time. And because a fence line is authority, its lifecycle is constitutional: proposed by the factory-engineer with a matrix justification, flagged by the reviewer's ownership axis, in force only after your ratification and a session restart. One line of YAML, but the line decides what a mind is able to do, which is why it gets the same ceremony as everything else that does.
+
+**Mechanism 4: the instruction hierarchy inside the file**. Each agent body in this project has five sections, and each section drives a different observable behavior.
 
 | Section in the agent file | Behavior you will observe |
 |---|---|
@@ -382,7 +478,7 @@ One genuine candidate for a sixth function that this project deliberately does n
 
 The economic rule that keeps all of this honest: the length budget is fixed even though the section list is not. An agent body stays around sixty lines; adding a Preconditions or Cautions section should usually be paid for by tightening something else, because six sections competing for salience weaken each other exactly the way ten iron laws do. So: five functions always, entry gates for the irreversible, scope lines for shared files, tripwire lists for the trap-prone and unattended, taxonomies for the adversarial, and nothing else without a failure that demands it.
 
-Mechanism 5: hooks and permissions, defined in `.claude/settings.json`. These run outside the model and cannot be talked out of anything. Three hooks matter here. The PostToolUse hook runs after every Edit or Write and formats Scala files (it always exits 0, so it never blocks). The PreToolUse hook inspects every shell command before it runs and exits 2 to block dangerous patterns such as DROP TABLE or terraform destroy; the text it prints to stderr is shown to the agent, which is why a blocked agent changes course instead of retrying. The Stop hook runs when an agent tries to finish; if Scala sources changed but the test suite has not run since (checked through a marker file that the build's `check` alias touches), it exits 2 and the agent is sent back to run `sbt check`. The permission lists in the same file pre-approve routine commands (sbt, git add/commit, terraform plan) and deny catastrophic ones (terraform apply, force-push) for everyone, agents and orchestrator alike. More information about hooks is available in [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
+**Mechanism 5: hooks and permissions, defined in `.claude/settings.json`.** These run outside the model and cannot be talked out of anything. Three hooks matter here. The PostToolUse hook runs after every Edit or Write and formats Scala files (it always exits 0, so it never blocks). The PreToolUse hook inspects every shell command before it runs and exits 2 to block dangerous patterns such as DROP TABLE or terraform destroy; the text it prints to stderr is shown to the agent, which is why a blocked agent changes course instead of retrying. The Stop hook runs when an agent tries to finish; if Scala sources changed but the test suite has not run since (checked through a marker file that the build's `check` alias touches), it exits 2 and the agent is sent back to run `sbt check`. The permission lists in the same file pre-approve routine commands (sbt, git add/commit, terraform plan) and deny catastrophic ones (terraform apply, force-push) for everyone, agents and orchestrator alike. More information about hooks is available in [Appendix F](#appendix-f-dependencies-between-agents-the-blocked-on-protocol).
 
 ---
 
@@ -468,7 +564,8 @@ Description changes are constitutional, so the loop belongs to the factory-engin
    docs/routing-tests.md green, and every repaired misroute adds its request
    to that corpus first, as a failing row, before the description changes.
 ```
-
+         ||
+         \/
 ```markdown
 6. Verify routing: run the routing suite against docs/routing-tests.md and
    report the pass count and any misroutes with the repair applied for each.
@@ -515,8 +612,7 @@ Create the Terraform state store. This is the one chicken-and-egg AWS step: Terr
 
 ```bash
 aws s3api create-bucket --bucket <unique>-tfstate --region us-east-1
-aws s3api put-bucket-versioning --bucket <unique>-tfstate \
-  --versioning-configuration Status=Enabled
+aws s3api create-bucket --bucket <unique>-tfstate --region us-east-1
 aws dynamodb create-table --table-name taskforge-tflock \
   --attribute-definitions AttributeName=LockID,AttributeType=S \
   --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST
@@ -533,9 +629,9 @@ Two standing conventions for every phase that follows:
 1. One phase, one session, one commit. Start each phase with a fresh `claude` session (or `/clear`). Commit at the end of each phase with the message given in that phase. The git log becomes the build diary.
 2. Reports travel by paste. When a phase says "paste the previous report", copy the agent's final report text into the new prompt. Mechanism 2 above is the reason: the next agent cannot see it otherwise.
 
-## 4. The authority matrix
+## 4. Creating the entire system
 
-This table is the design of the whole agent system, written before any agent exists. In [Phase 1](#phase-1-the-factory-builds-the-factory) you will hand it, serialized into a prompt, to the factory-engineer, which transcribes it into the nine remaining agent files. Keep it: when you later review any change to an agent file, this is what you diff against.
+Recall the authority matrix that we duplicate here for convenience - this table/matrix contains the design of the whole agent system, written before any agent exists. In [Phase 1](#phase-1-the-factory-builds-the-factory) we will serialize into a prompt, to the factory-engineer, which transcribes it into the nine remaining agent files. When we later review any change to an agent file, this is what you diff against.
 
 | Agent | May do autonomously | Must never | Must escalate | Enforced by |
 |---|---|---|---|---|
@@ -550,15 +646,7 @@ This table is the design of the whole agent system, written before any agent exi
 | incident-responder | diagnose; restart; rollback; scale 1 to 4 | data repair; schema rollback | data/schema/security, with a dossier | read-only tools + instruction + timebox |
 | dependency-updater | patch/minor version bumps plus sbt check | major bumps; forcing a red build | majors, with written analysis | instruction + CI + your merge gate |
 
-## Phase 0: the seed agent
-
-Goal: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
-
-Here is the expanded Phase 0, paste-ready. It replaces everything from `## Phase 0: the seed agent` down to (but not including) `## Phase 1: the factory builds the factory`. The heading is unchanged, so the table-of-contents link keeps working.
-
----
-
-## Phase 0: the seed agent
+### Phase 0: the seed agent
 
 Goal: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
 
@@ -592,6 +680,36 @@ What you will see: the interactive prompt opens, showing the working directory. 
 Step 0.3. Give the seed prompt, verbatim:
 
 > Create exactly one file, `.claude/agents/factory-engineer.md`, and nothing else: an agent whose job is to create and maintain the agent system itself (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json) from an authority matrix. Frontmatter: name factory-engineer; a routing-grade description ("Creates and maintains the agent system itself FROM SCRATCH... prepares constitutional diffs; never self-ratifies"); tools Read, Grep, Glob, Write, Edit, Bash. Body iron laws: (1) transcribe the authority matrix, never widen a fence or soften a law unless the matrix changed first; (2) every .claude/** change is constitutional: full diff plus justification, in force only after human ratification and restart, never self-approved; (3) least privilege by default: no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools; (4) channel discipline: timeless role files, universal facts to CLAUDE.md (at most 150 lines, at most 8 hard rules), one-run detail in task text; (5) floor invariants that may never be removed (guard patterns, stop_hook_active check, formatter exit 0, deny rules for terraform apply/destroy, force-push, .env reads). Procedure: read matrix, author files using the five-section skeleton with collision and orphan audits, validate mechanically (json parse, bash -n, chmod +x), present diff and stop. Print the full file content in your reply.
+
+Does Claude know where to find the authority matrix when it reads the seed prompt? No, and the design does not require it to, because at that moment there is nothing to find and nothing that tries to find it. The distinction that resolves this: the phrase "authority matrix" in the seed prompt is content to transcribe, not a reference to resolve. The seed session's entire task is to write specified words into a file. When it writes law 1, "transcribe the authority matrix (docs/agents.md)", it is copying a sentence, the way a scribe can copy "see appendix C" into a manuscript whose appendix C has not been written yet. No lookup is attempted because the instruction never asks the session to consult the matrix, only to create an agent whose future behavior will consult it. What the model does have is the linguistic understanding of what an authority matrix is (a table of powers, prohibitions, and escalations), which is enough to write a coherent description and laws around the term.
+
+The question of "knowing where to find it" then has a precise answer with three moments. At seed time (Phase 0): nothing resolves the reference, and the prompt's "create exactly one file and nothing else" forecloses the failure mode where a helpful session invents a matrix to fill the gap. At first invocation (Phase 1): the matrix does not need finding because it is delivered, serialized inside the invocation prompt itself; the agent works from what it was handed. At every invocation after that: the reference resolves by ordinary file reading, because the agent's own Phase 1 output created docs/agents.md, the seed file's law 1 names that exact path, and the agent's procedure step 1 says to read it, so a fresh context knows where to look for the same reason you know where to look when a document tells you the address. And if someone ever invokes the agent in a state where the path does not exist and no matrix came in the prompt, the correct behavior is designed in rather than hoped for: a transcriber with no source stops and reports the missing input instead of legislating one, which is the BLOCKED-ON pattern applied to the factory itself.
+
+One general point about every prompt you will ever write for this system is that an LLM never "knows where to find" anything in the sense of having an index. A reference in text resolves only through one of three concrete routes: the text itself names a path an agent can Read, the content arrives in the prompt, or the agent searches the world with its tools. When you write prompts and agent files, every dangling term you use should have one of those three routes attached, and the seed prompt's handling of "authority matrix" is the worked example: route two at first use, route one forever after.
+
+Here are the seven terms, each explained briefly as used in the seed prompt.
+
+**Frontmatter.** The machine-readable metadata block at the very top of a markdown file, fenced between two lines containing only `---`. The term comes from static-site publishing tools, where a page's title and tags ride above its content the same way. In an agent file the frontmatter carries three keys the runtime parses: `name` (the routing handle), `description` (the routing pattern), and `tools` (the fence). Everything below the second `---` is the body, which is not parsed at all; it is handed to the model verbatim as its system prompt. The distinction matters: frontmatter configures the runtime, body instructs the model.
+
+**Constitutional, in "constitutional diffs".** An analogy to a state's constitution: the rules that stand above ordinary rules because they define who holds power and how all other rules get made. In this system the constitution-level artifacts are CLAUDE.md, everything under .claude/ (agent files, hooks, settings.json, commands), .mcp.json, and docs/agents.md, because every other artifact in the repository is produced under their authority. A constitutional diff is a proposed change to any of those files. The elevated ceremony follows from the elevated blast radius: a bug in TaskService.scala breaks a feature; a bug in code-reviewer.md breaks the thing that catches broken features. So constitutional diffs get the strictest process in the system: full diff presented with justification, human ratification, session restart.
+
+**A fence.** The `tools:` list in an agent's frontmatter, which is the boundary of what that agent is physically able to do. The runtime offers the model only the tools on the list; an absent tool cannot be called, not because the agent is told not to but because the capability does not exist in its context. The metaphor is literal: a fence encloses the territory the agent can reach. The code-reviewer's fence (`Read, Grep, Glob, Bash`, no Edit, no Write) is the strongest example: reviewing without the ability to modify is enforced by absence, not by promise.
+
+**"Change is constitutional."** This phrase in law 2 needs disambiguating, because English gives "constitutional" two readings. It does not mean "the change complies with the constitution" (as in "that law is constitutional"). It means "the change belongs to the constitutional class", that is, it touches constitution-level files and therefore must follow the constitutional procedure: present the full diff plus the matrix row justifying it, stop, take effect only after human ratification and a restart, and never approve your own work. Read it as "every .claude change has constitutional status", a classification that triggers a process, not a verdict of compliance.
+
+**Tools fields.** The `tools:` key in each agent file's frontmatter, the fence just described; "fields" because it is one named field in the YAML. Its values are tool names: the perception bundle (Read, Grep, Glob), the mutation pair (Edit for existing files, Write for new ones), execution (Bash), research (WebSearch, WebFetch), and MCP tools by their full names (mcp__postgres__run_query). The seed's law 3 says "no omitted tools fields" because of a dangerous default: an agent file with no tools line does not get zero tools, it inherits all of them, everything the parent session has. Omission is the widest grant, so every agent file must carry the field explicitly.
+
+**Channel discipline, and what a channel is.** A channel is a pathway by which information reaches an agent, and there are exactly three, distinguished by audience and lifetime: shared memory (CLAUDE.md plus its imports, read by every session and every agent, permanent), the role file (one agent's body, read by that agent on every invocation, permanent), and task text (the prompt for one delegation, read once, ephemeral). Channel discipline is the rule that every fact lives in the channel matching who needs it and for how long: facts everyone always needs go to CLAUDE.md (with the budgets law 4 sets, at most 150 lines and 8 hard rules, because that file taxes every context); a role's standing procedure goes in its file, which must stay timeless; the specifics of one job go in the prompt. The misplacements the discipline forbids are the classic authoring bugs: per-task detail fossilized in a role file goes stale; procedure repeated in prompts drifts; a universal law stated in only one agent's file is innocently violated by the other nine.
+
+**"Procedure: read matrix", when the seed prompt supplies no matrix.** Resolved by when things happen. At seed time nothing is read: Phase 0 writes the words "read the matrix" into a file, defining a procedure the way a function signature defines a parameter, with no argument needed yet. The argument arrives at the first invocation: the Phase 1 prompt is the matrix, serialized into English by you (that is why it is so long), because in an empty world task text is the only channel that exists. Part of the factory-engineer's Phase 1 output is docs/agents.md, the matrix's permanent home; from then on "read matrix" resolves as an ordinary Read of that file, which CLAUDE.md also imports into every context. And if someone ever invokes the agent with no matrix on disk and none in the prompt, the procedure fails correctly: a transcriber with no source must stop and report the missing input (the BLOCKED-ON pattern) rather than invent authority, which is precisely the property law 1 exists to guarantee.
+
+The authority matrix is mentioned in the seed prompt, but not used. The seed prompt is not asking the session to build the agent system from a matrix; it is asking it to write a file describing an agent that will, whenever invoked, work from a matrix. The phrase "from an authority matrix" is content being written into the file: it ends up inside the description and inside law 1 ("transcribe the authority matrix (docs/agents.md); you do not legislate"). Writing those words requires no matrix, the same way writing a function signature `transcribe(matrix)` requires no particular matrix in hand. Phase 0 defines the function; nothing calls it yet. So the Phase 0 session knows everything it needs to know: the words to write. The reference inside those words is deliberately a forward reference, and note that the seed text even gives it a definite future address, the parenthetical "(docs/agents.md)", a file that does not exist yet.
+
+Second, the matrix enters at the first invocation, and it enters through the prompt at the Phase 1 prompt: after the opening sentence "Use the factory-engineer agent to create the rest of the TaskForge agent system from this authority matrix", everything that follows is the matrix, serialized into English. The ten agents with their fences (reviewer: Read/Grep/Glob/Bash only; migrator: plus the postgres read tool...), the ownership assignments, the escalation policy (rollbacks autonomous, applies human-run, constitutional changes human-ratified), the floor contents. The tutorial's section 4 exists precisely to prepare this: it tells you to write the matrix as a table on paper and says "in Phase 1 you will hand it, serialized into one prompt, to the factory-engineer". The reason it travels by prompt rather than by file is the time-zero property discussed for the seed itself: of the three channels an agent system normally uses (shared memory, role file, task text), only task text exists in an empty world, so the first delivery of the matrix has no other way in.
+
+Third: after Phase 1, the reference stops dangling, because resolving it is part of the factory-engineer's own first job. Among the artifacts the Phase 1 prompt orders is docs/agents.md, the ownership map and escalation policy, which is exactly the matrix written into its durable home. From that moment the dependency inverts: docs/agents.md exists in the repository, CLAUDE.md imports it into every context, and the factory-engineer's procedure step 1 ("read the current authority matrix and the change request") resolves by an ordinary Read of a real file. Every later invocation, for the rest of the system's life, gets the matrix from disk, and your Phase 1 prompt was the one and only time it traveled as prose. This is the standard migration pattern of the genesis, applied to its most important document: content is carried by task text exactly once, while the world is empty, and then moves to the durable channel where it belongs.
+
+Two edge cases complete the picture. If someone invoked the factory-engineer in a world where no matrix exists and none is supplied in the prompt, the correct behavior falls out of its design: procedure step 1 finds nothing to read, and a transcriber with no source must stop and report the missing input rather than invent authority; that is the verify-don't-assume rule plus the BLOCKED-ON protocol doing their job, and it is a designed refusal, not a malfunction. And on provenance: even docs/agents.md is not the true origin of the matrix; your paper design from the tutorial's section 4 is. The Phase 1 gate has you review the generated docs/agents.md against your own table, which is what makes the on-disk matrix a ratified serialization of human intent rather than something the factory wrote for itself. The chain of custody runs: your design, serialized into the Phase 1 prompt, transcribed by the factory, ratified by you, and only then cited by every future invocation. The seed prompt's unresolved phrase is the first link of that chain, written before the chain exists, which is exactly what a constitution does when it refers to laws not yet passed.
 
 Step 0.4. What happens while it runs, and why. There is no routing decision here: no agents exist, so the plain session executes the instruction itself rather than delegating. It will propose one Write tool call, creating `.claude/agents/factory-engineer.md`. Because no `settings.json` exists yet, there is no allow list, so the CLI shows you an interactive approval prompt for that file creation; approve it. Nothing else fires: no PostToolUse formatter (no hooks exist), no Stop-hook check (no marker machinery exists). The session then prints the complete file content in its reply, because the prompt's last sentence demanded it; that printed copy is what you review in the next step without having to open the file. Note why this prompt is so much longer than every prompt that follows it: it must carry both the specification and the discipline, because there is no agent file yet to carry the discipline. From Phase 1 on, prompts shrink to specifications only.
 
@@ -685,7 +803,7 @@ Now, after exiting claude, restart, so the agent loads.
 claude
 ```
 
-## Phase 1: the factory builds the factory
+### Phase 1: the factory builds the factory
 
 Goal: the complete agent system exists: CLAUDE.md, docs/agents.md (the ownership map), nine more agent files, three hooks, settings.json, .mcp.json, and three command files. All of it is authored by the factory-engineer from the [authority matrix](#4-the-authority-matrix), serialized into one prompt.
 
@@ -738,15 +856,17 @@ Expect a loud block. The PreToolUse guard hook matches the string DROP TABLE ins
 
 Expect a refusal that names build-engineer. The cause is feature-implementer law 6 (the build is not yours) plus its boundaries section; this is the ownership rule firing. If the implementer complies instead, its file is missing the boundary; route the fix through the factory-engineer and re-ratify.
 
+![img.png](img.png)
+
 ## Phase 2: build-engineer creates build.sbt and the project skeleton
 
 Goal: the complete build substrate, created from scratch by its owning agent: `build.sbt`, `project/build.properties`, `project/plugins.sbt`, `.scalafmt.conf`, `.gitignore`, `docker-compose.yml`. After this phase, `sbt check` exists and is the definition of done that every later phase's agents run.
 
-Step 2.1. Fresh session. Give this prompt, verbatim:
+Step 2.1. Fresh session. Give this prompt, verbatim.
 
 > Use the build-engineer agent to create the sbt build for TaskForge from scratch. Scala 3.3 LTS; pin exact versions as named vals: http4s 0.23.x (ember-server, dsl; ember-client Test-scoped), upickle 4.x as the ONLY JSON library, doobie 1.0.0-RC (core, hikari, postgres), Flyway (core plus postgres module, Runtime), PostgreSQL JDBC driver, logback (Runtime), munit plus munit-cats-effect (Test). scalacOptions -deprecation -feature -unchecked -Wunused:all, plus -Werror only when the CI env var is set. sbt-native-packager Docker config: eclipse-temurin:21-jre base, port 8080, non-root user, -XX:MaxRAMPercentage=75.0. A markTestRun task touching .claude/.last-test-run, and aliases fmt, check (scalafmtCheckAll; Test/compile; test; markTestRun), dockerLocal. Also project/build.properties (current sbt 1.x), plugins.sbt (native-packager, scalafmt), .scalafmt.conf (scala3 dialect, maxColumn 100), .gitignore (sbt/metals/terraform/.env outputs plus the marker), docker-compose.yml (healthchecked postgres:16 db service; app service running taskforge:latest). Verify with `sbt Test/compile`; report versions chosen and any deviation from this spec.
 
-Step 2.2. What happens, tool call by tool call, and which instruction causes each behavior. The runtime routes to build-engineer because you named it (and because its description contains "Creates the sbt build ... FROM SCRATCH", which would catch even an unnamed request). A fresh context is assembled from build-engineer.md plus CLAUDE.md plus your prompt. Then:
+Step 2.2. What happens, tool call by tool call, and which instruction causes each behavior. The runtime routes to build-engineer because you named it (and because its description contains "Creates the sbt build ... FROM SCRATCH", which would catch even an unnamed request). A fresh context is assembled from build-engineer.md plus CLAUDE.md plus your prompt. 
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -772,15 +892,15 @@ git add -A && git commit -m "genesis 2: build substrate by build-engineer"
 
 Step 2.4. Failure branch. If a chosen version does not resolve, paste the exact sbt error back to the same agent; per its boundaries it may escalate a registry lookup it cannot settle. If a wrong library appears despite everything, reject in one line ("circe is present; constitution says upickle only; remove and re-verify") and note which layer failed: prompt, law, or gate. In this design a wrong library reaching the commit means two layers failed, which is the point of having both.
 
-## Phase 3: the domain and the wire format
+### Phase 3: the domain and the wire format
 
 Goal: the shared kernel every tier depends on: `domain/Task.scala` (entity, status enum, request payloads, typed errors, upickle codecs), `config/AppConfig.scala`, and `JsonCodecSuite`, which freezes the JSON wire format before anything depends on it.
 
-Step 3.1. Fresh session. Prompt, verbatim:
+Step 3.1. Fresh session. Enter the following prompt, verbatim.
 
 > Use the feature-implementer agent to create the TaskForge domain in com.taskforge.domain, one file: a top-level `given ReadWriter[java.time.Instant]` via ISO-8601 strings (readwriter[String].bimap) placed above the case classes so derivation finds it; `enum TaskStatus derives ReadWriter` with Todo, InProgress, Done; `final case class Task(id: Long, title, description, status, createdAt, updatedAt) derives ReadWriter`; `CreateTaskRequest(title, description = "")` and `UpdateTaskRequest` with all-Option fields defaulted None (absent JSON keys must parse); `ErrorResponse(error)`; and a `sealed abstract class AppError(message) extends Exception with NoStackTrace` with TaskNotFound(id), ValidationFailed(reason), InvalidTransition(from, to). Also com.taskforge.config.AppConfig: env-var config (HTTP_HOST/PORT, DB_URL/USER/PASSWORD/POOL_SIZE) with local defaults, no config library. Then a JsonCodecSuite (plain munit) that pins: Task round-trip; enum encodes as bare string "InProgress"; Instant as ISO-8601; CreateTaskRequest parses without description; UpdateTaskRequest parses from {}; unknown enum value fails. Run `sbt check`; report the exact JSON of one sample Task.
 
-Step 3.2. What happens, and why:
+Step 3.2. What happens, and why
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -795,21 +915,43 @@ Step 3.3. Your gate. Green `sbt check`; the sample JSON shows string enums and I
 git add -A && git commit -m "genesis 3: domain, codecs, wire-format suite"
 ```
 
-## Phase 4: schema and data tier
+### Phase 4: schema and data tier
 
 Goal: `V1__create_tasks.sql`, the `TaskRepository` trait (the port), `DoobieTaskRepository` (the adapter), and `Database` (pool plus migrate-on-boot). Two agents run in sequence, because schema and code have different owners.
 
-Step 4.1. Fresh session. The migration first, addressed to its owner:
+Step 4.1. Fresh session. The migration first, addressed to its owner as specified in the following prompt.
 
 > Use the db-migrator agent to create V1 for TaskForge: a tasks table with id BIGSERIAL PK; title VARCHAR(200) NOT NULL; description TEXT NOT NULL DEFAULT ''; status VARCHAR(20) NOT NULL DEFAULT 'Todo' CHECK (status IN ('Todo','InProgress','Done')); created_at and updated_at TIMESTAMPTZ NOT NULL DEFAULT now(); an index on status (the list endpoint filters by it). Header comment: applied migrations are never edited. There is no live database yet, so your inspect step is vacuous this once; say so in your report. Verify by `docker compose up -d db` and confirming Flyway applies it, then report the compatibility analysis (trivial for V1) and rollback strategy.
 
 Why the prompt licenses a skipped step explicitly: the migrator's procedure step 1 is "inspect the current schema through the postgres MCP server; never assume". Against an empty world that step cannot run. A well-built agent states a skipped step rather than silently skipping, and the license lives in the prompt (one run) rather than in the agent file (forever), so skipping never becomes normal.
 
-Step 4.2. Then the code against the schema:
+Step 4.2. The data tier, built by the feature-implementer against the schema from 4.1.
 
 > Use the feature-implementer agent to build the data tier against V1: data/TaskRepository.scala, a trait on IO (create, get, list by optional status, update, delete), the tier-3 port; data/DoobieTaskRepository.scala, a doobie implementation using sql interpolators only, RETURNING on insert and update, .query[Task] with column order exactly matching the case class, a companion `given Meta[TaskStatus]` via Meta[String].timap, java.time Metas from `doobie.postgres.implicits.*` (do NOT hand-roll Meta[Instant]); data/Database.scala, Flyway migrate as IO.blocking (idempotent, runs every boot) plus a HikariTransactor Resource with a fixed thread pool sized to the connection pool. Run `sbt check`; report any place the schema and the case class could drift and what catches it.
 
+![img_2.png](img_2.png)
+
 Step 4.3. What happens, and why. The drift question in the prompt is a comprehension check: the correct report answer is that `.query[Task]` maps columns to fields by position, so the compiler and the first test catch a reordered column list. An agent that cannot name that tripwire did not understand the code it just wrote, and you should treat the phase as failed even if the build is green. The guard hook is also relevant in this phase: if any agent ever proposed running a DROP TABLE against the compose database, the PreToolUse hook would block it regardless of intent.
+
+This response is the machinery working, not misbehaving: the implementer hit two things it is forbidden to fix itself, contained both (a stable stub with the fix documented; a clean file that will only violate later), and routed the decisions to you. Both decisions are yours as principal, and here is how I would dispose of each, with the exact prompts.
+
+Decision 1: accept, with one refinement, and route to build-engineer. The agent's analysis is right: `Database.migrate` calls the Flyway API from the data tier, so `flyway-core` must be on the compile classpath; Runtime scope was the wrong home for it. The refinement: only move `flyway-core`. Keep `flyway-database-postgresql` at Runtime, because nothing ever compiles against it; Flyway discovers it reflectively at boot, so it is a true runtime-only artifact and the "no tier can write code against them" comment stays honest for it. Send the following prompt to `claude`.
+
+> Use the build-engineer agent to apply a dependency-scope change requested by the feature-implementer: move flyway-core from Runtime scope into the data-tier compile dependencies; keep flyway-database-postgresql at Runtime (nothing compiles against it; Flyway loads it reflectively at boot). Justification: boot-time migration is a data-tier responsibility and Database.migrate uses the Flyway API at compile time. Update the scope comment so it stays true. Run sbt Test/compile and report the diff. The implementer's report: [paste item 1 verbatim].
+
+Then close the loop with the blocked agent, fresh prompt.
+
+> Use the feature-implementer agent to finish data/Database.scala: replace the MigrationsUnavailable stub with the real Flyway body (it is in the scaladoc you left), keep the existing signature, run sbt check, and report.
+
+One gate note: do not commit Phase 4b with the stub in place. The stub was the right containment for an in-flight block, but a committed `migrate` that raises would pass compile and fail at boot, which is exactly the class of defect the phase gates exist to stop. Land the build fix and the real body first, then commit once.
+
+Decision 2: this one is genuine drift, and the rule for drift is that code and constitution must not be left disagreeing; either code follows constitution or the constitution is amended, never silence. Accept the agent's suggestion, since the generated CLAUDE.md says the business tier depends on traits it defines, so move the port out of the data package now, while it is one line.
+
+> Use the feature-implementer agent to move TaskRepository from com.taskforge.data to com.taskforge.domain, per CLAUDE.md's rule that the business tier must not depend on the data tier: update the package declaration and the import in DoobieTaskRepository, run sbt check, and report.
+
+A tradeoff is to decide whether the trait's methods return IO, so placing it in domain makes your shared kernel depend on cats-effect. If you want domain to stay effect-free, the alternative home is a package on the service side (for example com.taskforge.service.ports), which satisfies the same constitutional sentence. Either is fine; pick one and say it in the prompt. The expensive disposal, only worth it if you actually prefer the reference design (service may depend on a port trait that lives in data), is a constitutional amendment: route a CLAUDE.md wording change through the factory-engineer and ratify with commit plus restart. 
+
+Last, run the evolution habit, because item 1 has a root cause upstream of both agents: the Phase 2 work order. The genesis prompt says "Flyway (core plus postgres module, Runtime)", and your build-engineer read the scope as applying to both artifacts, which is a perfectly reasonable parse of an ambiguous sentence. The fix belongs in the spec, so the next genesis is immune: change that clause in docs/genesis-prompts.md to "flyway-core (compile scope: the data tier calls its API at boot) plus flyway-database-postgresql (Runtime: loaded reflectively)". If you want the immunity in the standing layer too, one caution line added to build-engineer's file (via factory-engineer, ratified) does it: "a migration runner whose API is invoked from code needs compile scope in the invoking tier; only reflectively-loaded modules go Runtime". Findings become spec; every genesis failure should leave the factory smarter, and this one improves a prompt, an agent, and your build in a single pass.
 
 Step 4.4. Gates and commits, one per sub-step:
 
@@ -822,15 +964,15 @@ git add -A && git commit -m "genesis 4b: data tier by feature-implementer"
 
 Step 4.5. Failure branch, a real one. Library APIs move; a doobie release relocated its java.time instances, and an import that trains well (`doobie.implicits.javasql`) no longer compiles. The compile error is the system working. Paste the compiler error back to the implementer; if it flails because its API knowledge is stale, the lookup escalates (the dependency-updater has the research tools) and the confirmed fix comes back as one edit. Afterward, one sentence gets added to the dependency-updater's cautions ("doobie RC bumps can change implicit imports; recompile is the test"), which is how every genesis failure leaves the factory smarter.
 
-## Phase 5: service tier and adversarial tests
+### Phase 5: service tier and adversarial tests
 
 Goal: `TaskService` with the business rules encoded as data, an in-memory repository for tests, the service suite, and then a second agent whose whole job is to attack what the first one built.
 
-Step 5.1. Fresh session. The implementer first:
+Step 5.1. Fresh session. The implementer runs first using the following prompt.
 
 > Use the feature-implementer agent to build the business tier: service/TaskService.scala depending ONLY on the TaskRepository trait and domain. create (title trimmed, nonempty, at most 200 chars); get (absent id raises TaskNotFound); list; update (validate any new title; validate status transitions; absent after update raises TaskNotFound); delete (false raises TaskNotFound). Encode legal transitions as a Set of (from, to) pairs: Todo to InProgress, InProgress to Done, Done to Todo, InProgress to Todo, plus same-state no-ops, so the rules are data, not if-trees. In src/test: InMemoryTaskRepository over a Ref[IO, Map[Long, Task]] plus a counter, and a TaskServiceSuite (munit-cats-effect) covering create/trim/reject, every legal transition, one illegal one, list filtering, delete then delete. Run `sbt check`; report the transition set verbatim.
 
-Step 5.2. Then the adversary, with the report pasted forward:
+Step 5.2. Then the adversary, with the report pasted forward that comes from the previous step.
 
 > Use the test-engineer agent on the service tier. The implementer's report: [PASTE THE FULL 5.1 REPORT HERE]. Enumerate what it missed per your mission categories; add the tests; leave any failing test failing and report it.
 
@@ -850,7 +992,7 @@ sbt check
 git add -A && git commit -m "genesis 5: service rules plus adversarial hardening"
 ```
 
-## Phase 6: web tier and frontend
+### Phase 6: web tier and frontend
 
 Goal: the upickle-to-http4s bridge, the REST routes with centralized error mapping, the liveness/readiness split, the composition root, the browser frontend, and the route suite. One implementer delegation; the longest specification in the tutorial, and still pure specification: no discipline sentences needed.
 
@@ -870,7 +1012,7 @@ kill %1
 git add -A && git commit -m "genesis 6: web tier and frontend"
 ```
 
-## Phase 7: full review
+### Phase 7: full review
 
 Goal: the entire codebase reviewed by the agent that cannot edit.
 
@@ -897,7 +1039,7 @@ git add -A && git commit -m "genesis 7: review findings resolved"
 
 Never fix findings inside the review session. The reviewer has no hands by design, and the writer/checker separation holds even when the human is tempted to shortcut it.
 
-## Phase 8: infrastructure and scripts
+### Phase 8: infrastructure and scripts
 
 Goal: `infra/terraform` (VPC, security groups chained ALB to app to db, RDS with its password only in Secrets Manager, ECR with immutable SHA tags, ECS cluster and service with a deployment circuit breaker, ALB health-checking /healthz, CloudWatch alarms to SNS, outputs) and `scripts/` (deploy.sh, rollback.sh, smoke-test.sh). One owning agent authors both; you apply.
 
@@ -929,7 +1071,7 @@ cd ../..
 git add -A && git commit -m "genesis 8: infrastructure and scripts by infra-engineer"
 ```
 
-## Phase 9: first deploy
+### Phase 9: first deploy
 
 Goal: the application, live on AWS, deployed and gated by the deploy-engineer.
 
@@ -960,7 +1102,7 @@ curl http://<alb_dns_name>/readyz
 
 A failed first deploy is common (an IAM edge, a subnet route). The deploy-engineer's report will contain stopped-task reasons captured before rollback; route them by artifact class: infra shape to infra-engineer (then you re-apply), code to the implementer, then `/deploy staging` again. The rollback muscle gets exercised on day one, which is when you want to learn it works.
 
-## Phase 10: pipelines
+### Phase 10: pipelines
 
 Goal: three GitHub Actions workflows, authored by the infra-engineer: CI running the same `sbt check` as everyone, the @claude responder, and the weekly headless maintenance run.
 
@@ -979,7 +1121,7 @@ git log --oneline
 
 The log now reads: seed, factory, build, domain, schema, data, service, web, review, infra, deploy, pipelines. Zero human-written files. The application, the build, the infrastructure, and the agent system itself were all authored by agents; you contributed prompts, ratifications, and one terraform apply.
 
-## 11. After genesis: the operating loops
+### 11. After genesis: the operating loops
 
 Three standing loops keep the system alive; each reuses agents and mechanisms you have already watched work.
 
@@ -1331,3 +1473,313 @@ Hooks are external scripts run at fixed lifecycle moments: PreToolUse before a t
 The three hooks in this project are the three archetypes, each a hook rather than a sentence for a stated reason. The normalizer (format-scala.sh, PostToolUse on Edit|Write) formats the one touched Scala file and always exits 0: instruction-level formatting compliance runs about 95 percent, and the missing 5 percent becomes diff noise polluting every later review; conveniences never block, so its failures are swallowed. The guard (guard-dangerous.sh, PreToolUse on Bash) matches the actual command string, case-insensitively, against a pattern list (DROP TABLE, TRUNCATE, terraform destroy, rm -rf /, force-delete flags) and exits 2 on a hit. It exists alongside the deny list because the two match different things: permission globs match the shape of an invocation, anchored at the front, while the guard reads the whole string, where a destructive statement can hide inside psql -c "..." or a heredoc; two nets with different weaves catch different fish, and every incident that reveals a new dangerous shape adds a pattern here. The completion gate (verify-tests-ran.sh, Stop) first exits 0 if stop_hook_active is set, the mandatory loop guard, since the runtime sets that flag on the continuation a previous block caused. Then, if git diff shows changed .scala files newer than the marker file .claude/.last-test-run (touched by the markTestRun task at the end of the sbt check alias, so the build itself writes the evidence and no log parsing is needed), it exits 2 with "Run sbt check and fix any failures before finishing": the definition of done as a precondition of stopping rather than a request.
 
 The floor composes with the other mechanisms as the middle layers of a four-layer stack, each catching what the previous cannot: the tool fence (agent frontmatter) removes whole capability classes, permissions block invocation shapes, hooks inspect semantic content and lifecycle conditions, and instructions carry everything that requires judgment, the only persuadable layer. The sorting rule for where any given rule belongs: if 95 percent compliance is acceptable, it stays prose with a named detection (a reviewer axis, a CI step); if 95 percent is a disaster, it goes into the floor. Two operational facts complete the picture. The floor fails silently (a mistyped matcher matches nothing, a hook without its executable bit never runs, and nothing tells you), so it is verified empirically, never by reading: probe the guard with echo 'DROP TABLE tasks' and watch it block, trip the Stop hook once on purpose, and repeat both after any change to settings.json; mechanism you have not seen fire is mechanism you do not have. And the floor is constitutional: settings.json and the hook scripts belong to the factory-engineer, whose own laws forbid removing the guard patterns, the stop_hook_active check, or the deny rules, so any weakening diff requires human ratification. The floor protects the agents from their failure modes; the ratification gate protects the floor from the agents.
+
+---
+<a name="appendixG"></a>
+## Appendix G:  Forming the tools line from first principles
+
+The `tools:` line looks like configuration, but it is the last step of a derivation that starts from the question "what system should exist?" If you know the derivation, you can form the line for any agent in any project, and you can re-derive it later to check that it is still right. The chain has six levels, and each level answers one question.
+
+**Level 0: fix the action ontology**. The first principle everything else stands on: in this runtime, every effect on the world is a tool call. An agent is not a person with hands; it is a policy that emits tool calls from a fixed alphabet. Therefore "designing what an agent may do" is not a matter of job descriptions; it is literally choosing a sub-alphabet. Write the full alphabet down once, grouped by what each symbol touches: perception of the repository (Read, Grep, Glob), mutation of the repository (Edit for existing files, Write for new ones), arbitrary execution (Bash, the escape hatch into everything the shell can reach), perception of the external world (MCP read tools: the database, AWS state), mutation of the external world (MCP write tools, which this architecture avoids on principle, routing external writes through reviewed scripts instead), and knowledge acquisition (WebSearch, WebFetch). This grouping is the periodic table the rest of the derivation selects from.
+
+**Level 1: enumerate the state the system consists of**. From "a deployed Scala three-tier application" derive the state spaces the system touches: the repository (subdivided into artifact classes: build definition, source, tests, migrations, infrastructure code, the agent system itself), the external runtime (AWS resources, the live database), and the information environment (library versions, advisories). Every artifact class and every external space will need, at minimum, someone who can perceive it and someone who can change it. This enumeration is what makes the later steps checkable: a tool grant is justifiable only by pointing at a state space the role must touch.
+
+**Level 2: state the invariants the system must preserve**. These come from what could destroy the system, not from what builds it: exactly one writer per artifact class (else concurrent uncoordinated mutation); the checker never shares authority with the writer it checks (else defects survive); irreversible acts are enacted only by a human (else the worst possible moment test fails); verification precedes done (else unverified work compounds); secrets never enter model context (else they can exit it). Notice that every invariant is a constraint over the action space from Level 0: "one writer" constrains who holds mutation symbols for which paths; "checker holds no write authority" removes mutation symbols from a role entirely; "irreversible acts are human" removes external-mutation symbols from everyone.
+
+**Level 3: partition the work into roles such that the invariants become expressible per role**. This is where the ten agents come from, and the fence is the reason the partition has to be shaped the way it is: the fence can only speak at the granularity of whole tools per agent, so roles must be cut so that each role's legitimate action set is describable as a tool subset. If one role legitimately needed "write source and also write migrations", the one-writer invariant could not be expressed by any fence, and you would be back to trusting prose. The partition is chosen so that authority boundaries fall on tool boundaries wherever possible. That is a first-principles insight worth stating plainly: the team structure is partly a compilation target for the fence mechanism. You design roles so that safety properties compile down to tool subsets.
+
+**Level 4: derive each role's demand set from its procedure**. Write the role's procedure as a sequence of interactions with the state spaces of Level 1, and under each step write the weakest symbol from the Level 0 alphabet that performs it. The union of those symbols is the demand set. For the code-reviewer: obtain the change set (git diff, so Bash), read touched files whole (Read), check structural claims across the tree (Grep, Glob), compile and run tests as evidence (Bash again). Demand set: Read, Grep, Glob, Bash. For the dependency-updater: enumerate current versions (Read, Grep), check upstream (WebSearch, WebFetch), modify existing build files (Edit, and pointedly not Write, because its procedure never creates a file), verify (Bash for sbt check). Demand set: Read, Grep, Glob, Edit, Bash, WebSearch, WebFetch.
+
+**Level 5: subtract, then reconcile against the invariants**. The fence is not the demand set; it is the demand set filtered through Level 2. Three checks, in order. First, the invariant check: does any demanded symbol let the role violate an invariant? The reviewer's demand set contains no mutation symbols, so the checker-writer invariant is satisfied by construction; if it had contained one, the resolution is never "grant it and instruct against misuse" but either reshape the procedure (the tester's failing-test handoff exists precisely so the tester's Write never needs to touch production code) or accept a residue consciously. Second, the superset check: Bash subsumes most other symbols (a shell can write files and fetch URLs), so any fence containing Bash is really "fence plus floor plus evidence", and you must decide per role whether that layered guarantee suffices or whether Bash itself must go, paying the price in lost verification ability. Record the decision; do not let it happen by default. Third, the absence check, in the opposite direction: walk the procedure once more and confirm every step still has its symbol, because an over-subtracted fence produces an agent that thrashes at or silently skips the step it cannot perform, and skipped verification is the most expensive absence there is.
+
+**Level 6: emit the line, and store the proof next to the theorem**. The line itself is now forced as follows.
+
+```yaml
+tools: Read, Grep, Glob, Bash
+```
+
+But the line alone is only the conclusion. The derivation that produced it (which invariant removed Edit and Write; which procedure step justified Bash; what the Bash residue is and which layer covers it) lives in the authority matrix, and that placement is the final first principle: every fence must be re-derivable, because fences change. When someone later proposes adding Edit to the reviewer "so it can fix trivial findings itself", the question is not whether that sounds convenient; it is which line of the derivation breaks, and the matrix shows it immediately: the checker-writer invariant of Level 2. The proposal is thereby revealed as a change to the system's safety properties, not to a config file, which is exactly why fence edits are constitutional. In the same spirit, the empirical probes are the proof's test suite: asking the reviewer to edit a file and expecting refusal-by-inability is checking that the deployed line still matches the derived one.
+
+Compressed to a formula you can apply to any new system: fix the action alphabet the runtime gives you; enumerate the state your system consists of; write the invariants whose violation would destroy it; cut roles so invariants land on tool boundaries; per role, take the weakest symbols its procedure demands; subtract what the invariants forbid, reconcile what they cannot forbid (the Bash residue) with lower layers; emit the line and keep the derivation. The tools line is then not a setting you chose but a theorem you proved, and the agent system's safety story is the collection of those proofs plus the machinery that re-checks them.
+
+
+<a name="appendixH"></a>
+## Appendix H: Forming the seed prompt from first principles
+
+The seed prompt looks like a long instruction, but every clause in it is the conclusion of a derivation that starts from one sentence about the desired end state. If you know the derivation, you can write the seed prompt for any agent system, and you can defend every word of it when someone asks why it is there. The chain has seven steps.
+
+**Step 1: state the end state, and notice it forces a fixed point**. The system to be created is one where every artifact is authored and maintained by agents under invariants, with human authorship at zero. Now apply closure: agent definition files are themselves artifacts in the repository. If all artifacts are agent-authored, then some agent must author agent files. That agent is not a design preference; it is forced by the closure property. That is, we distinguish two kinds of things that show up in a design: things we chose, which could have been otherwise, and things entailed by what we already chose, which cannot. It claims the factory-engineer is the second kind, and the argument is a three-line syllogism.
+
+Premise 1 is the end-state requirement you set for the system: every artifact in the repository is authored and maintained by some agent, with human authorship at zero. Premise 2 is an observation about the world: agent definition files are themselves artifacts in the repository; they are ordinary text files that must be created, evolved, and kept correct like everything else. The conclusion follows with no room for taste: some agent must author and maintain agent definition files. That agent is the factory-engineer. You still have plenty of freedom about it (its name, its laws, whether the role is one agent or split into two), but its existence is not on the menu. Delete it and you do not get a leaner design; you get a contradiction with premise 1: either a human hand-writes the agent files (so authorship is not zero, and the artifact class ".claude" has no owning agent, breaking the one-writer rule too), or the agent files are maintained by nobody and the system cannot evolve.
+
+The "closure property" is where a set is closed under an operation if applying the operation never takes you outside the set: integers are closed under addition (any two integers sum to an integer) but not under division (one divided by two leaves the set). Here the set is "artifacts authored by agents" and the requirement is that the whole repository lies inside it. The twist that generates the forced agent is self-reference: the agents are themselves described by repository artifacts, so the set must contain its own means of production. A system closed under "who writes this?" must contain a writer of writers.
+
+The pattern is old and appears wherever a system is required to fully account for its own machinery. A self-hosting compiler must be able to compile its own source, so somewhere in the toolchain there is a compiler that compiles compilers, and it too had a bootstrap moment. A machine shop that claims to make all its own equipment must contain machine tools that make machine-tool parts. A legal system that requires every rule change to follow rules must contain rules about changing rules, an amendment clause, and no constitution can omit one without either freezing forever or being changed lawlessly. The factory-engineer is exactly the amendment clause of this system, and the Phase 0 seed is its bootstrap moment, forced by the same logic one step further back: the writer of writers cannot write itself into existence, so the first copy must be injected from outside, once, by hand, which is why the seed exists and why it is kept minimal.
+
+There is a coherent alternative design in which the human personally owns and hand-edits everything under `.claude`, and no factory-engineer exists. But notice what that alternative actually is - it is a different premise 1, a system where human authorship is not zero and one artifact class sits outside the ownership map, permanently hand-maintained and permanently exempt from the gates every other artifact passes through. The tutorial's point in marking the agent as forced rather than preferred is practical: when someone later tries to simplify the roster ("do we really need ten agents?"), the merges and cuts are legitimate negotiations everywhere except here. You can argue the infra-engineer into the implementer; you cannot argue away the writer of writers without quietly abandoning the requirement the whole system was built to satisfy, and it is better to know which kind of argument you are having. 
+
+This is where the factory-engineer comes from, and it is why the seed prompt creates that agent and not, say, the build-engineer first: the factory-engineer is the generator of the closed system, and everything else is reachable from it.
+
+**Step 2: face the bootstrap problem, and minimize the ungoverned surface**. The generator cannot author itself into existence; before it exists there are no agents. So something outside the closed system must inject the first element: a plain session, directed by a human. Everything created in that moment is without any of the system's protections, because none exist yet: no fences, no hooks, no permissions, no reviewer. From this follows the minimality principle: the ungoverned act must be as small as possible, because human line-by-line review is the only verification available for it and human review capacity is the scarcest resource in the whole design. The smallest sufficient injection is one file. That derives the prompt's opening clause, including its sternest words: "Create exactly one file... and nothing else." The "and nothing else" is not fussiness; every additional file the seed session created would be another ungoverned artifact competing for the same finite review attention, produced before the rules that should have governed it.
+
+**Step 3: derive the file's scope from the ownership analysis, and note why the prompt must enumerate it**. The one file must define an agent capable of generating the rest of the factory, so its jurisdiction is exactly the artifact class "constitution and floor": CLAUDE.md, docs/agents.md, .claude/agents/*, hooks, settings.json, commands, .mcp.json. In a mature system that list would be cited from the ownership map; at seed time no ownership map exists, so the prompt must spell the list out in full. This is a general property of the seed prompt worth seeing clearly: of the three channels an agent system normally uses (shared memory, role files, task text), only task text exists at time zero. The prompt is therefore forced to carry, temporarily, content that belongs in the other two channels. That is why it is the longest prompt in the tutorial, and why every later prompt is shorter: after Phase 1, the content migrates into its proper channels and task text shrinks back to specifications.
+
+**Step 4: confront the blast radius, and derive the self-limitation clauses**. The generator's outputs govern every other agent: its files decide who exists, what tools they hold, what laws bind them. It is therefore the maximum-blast-radius component in the system, and the invariant "authority changes only through human disposal" must bind it hardest of all. Three clauses of the prompt fall out of this single requirement. First, "from an authority matrix" plus law 1 (transcribe, never widen or soften unless the matrix changed first): the matrix is the human-owned specification, and making it the generator's input demotes the generator from legislator to transcriber; authority originates with you, and the agent only serializes it. Second, law 2 and the procedure's ending ("present diff and stop... never self-approved"): without this, the system contains a privilege-escalation path where one misrouted or malicious instruction causes the factory to widen every fence and ratify its own change; never-self-ratifies is what keeps the fixed point strictly below human authority. Third, the description's phrasing ("prepares constitutional diffs; never self-ratifies"): the limitation is placed in the routing surface itself, so even the sentence other sessions read when deciding to invoke this agent carries the constraint.
+
+**Step 5: install the system-wide invariants as laws of the generator, because properties propagate only through the generator**. The factory will write the other nine agents, the hooks, and the permission lists. Any property you want those artifacts to have must therefore exist as a law of the factory, since the factory is the only channel through which the property can reach them. Read laws 3 through 5 as exactly this: law 3 is the fence theory compressed into the generator (no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools), so least privilege is not a hope about future files but a rule of the machine that writes them; law 4 is the information architecture (timeless role files, CLAUDE.md budgets, one-run detail in task text), so channel discipline reproduces itself; law 5 is the floor's self-preservation, and it is the subtlest of the three: the factory is the only agent able to edit the floor, so the floor's permanence cannot be enforced by the floor itself and must instead be a law of its sole editor. The general principle: a generator must carry, as its own laws, every invariant you want its outputs to satisfy. That is why the seed prompt reads like a constitution's genome; it is one.
+
+**Step 6: derive the fence and the procedure from the role's own work**. The tools line (Read, Grep, Glob, Write, Edit, Bash) follows the standard demand-set derivation: Write because it creates files, Edit because it evolves them, the perception bundle to read the matrix and the existing tree, Bash for its mechanical validations, no MCP names because all its artifacts are local, no web tools because it is not a research role. One apparent paradox needs resolving: why may this agent hold Write over the most sensitive files in the repository? Because the safety property was never "the constitution cannot be drafted"; it is "drafts are inert until disposed". Proposal is safe by construction (files in a working tree, in force only after your commit and a restart); disposal is what the gate protects. The procedure clause then encodes the universal verification-tail principle using the only oracles configuration artifacts admit: json parse for the JSON files, bash -n and chmod +x for the hook scripts, plus the two quality audits (collision, orphan) that are the routing layer's tests. And it ends at the disposal boundary: present diff and stop.
+
+**Step 7: close the loop with the review clause**. "Print the full file content in your reply" exists because of Step 2: the seed is the one artifact produced with zero system protection, so it receives zero-trust review, and the prompt arranges for the artifact to be surfaced in-band, in the reply itself, where you can read it against the reference listing without even trusting your own file browsing. The last ungoverned act ends with its output laid on the table for inspection.
+
+The whole derivation is given in one table below.
+
+| Clause in the seed prompt | First principle it follows from |
+|---|---|
+| create exactly one file, and nothing else | closure forces a generator; bootstrap forces injection; minimality bounds the ungoverned surface |
+| the enumerated jurisdiction list | ownership analysis, spelled out because only the task-text channel exists at time zero |
+| from an authority matrix; law 1 | authority originates with the human; the generator transcribes, never legislates |
+| law 2; present diff and stop; never self-ratifies | no self-ratification: the fixed point stays below human authority; proposal safe, disposal gated |
+| law 3 (least privilege defaults) | invariants propagate only through the generator: fence theory installed as generator law |
+| law 4 (channel discipline, budgets) | same propagation principle, applied to information architecture |
+| law 5 (floor invariants never removed) | the floor cannot protect itself from its only editor; permanence must be the editor's law |
+| tools: Read, Grep, Glob, Write, Edit, Bash | demand-set derivation from the role's procedure; no MCP, no web |
+| validate mechanically (json, bash -n, chmod +x); audits | verification tail using the only oracles config artifacts admit |
+| print the full file content in your reply | zero-trust review of the single ungoverned artifact |
+
+Compressed to an algorithm you can reuse for any system: state the closure property; find the generator it forces; inject the generator minimally and review it with full attention; make it a transcriber of a human-owned spec; forbid self-ratification; install every system-wide invariant as one of its laws; derive its fence from its procedure; end its procedure at the disposal boundary; and surface its first output for zero-trust review. The seed prompt is that algorithm, executed once, in English.
+
+<a name="appendixK"></a>
+## Appendix K: MCP server toolkit
+
+_Model Context Protocol (MCP)_ is a standard for plugging external tool servers into Claude Code, a small separate program that advertises tools, receives calls, and returns results. Tools that come from MCP servers appear in Claude Code as `mcp__<server>__<tool>`, double underscores as separators. So `mcp__postgres__run_query` is the tool named run_query provided by the server named postgres. The built-in tools (Read, Bash, Edit) are part of Claude Code itself; MCP tools are supplied by these pluggable servers, and the prefixed name tells you exactly which server stands behind each one.
+
+Where this particular one comes from in the project: the `.mcp.json` file at the repository root declares a server entry named postgres, pointing at the awslabs PostgreSQL MCP server, launched via uvx, with the connection string supplied through environment expansion (so no credentials enter the repo) and, critically, started with its read-only flag on. When a session starts, Claude Code launches that server process, asks it what tools it offers, and exposes each one under the prefixed name. run_query is the server's core tool: it takes a SQL string as its parameter, executes it against the configured database, and returns the result rows into the calling agent's context.
+
+What the db-migrator uses it for is exactly one thing, its procedure step 1: inspect the live schema before authoring any migration, never assume. In practice that means queries against the catalog, information_schema.columns for a table's real shape, the flyway_schema_history table for what is actually applied, and so on. The repository's migration files describe what should be true; production describes what is true; this tool is how the migrator reads the second instead of trusting the first. The incident-responder holds the same tool for a different purpose, reading pg_stat_activity and lock views during triage.
+
+The safety story is the layered pattern from the MCP posture rule (MCP for eyes, scripts for hands), and it is worth seeing both layers. Layer one is server-level: the process itself runs read-only, so a write or DDL statement is refused by the server no matter who sends it or how the request is phrased; even if the migrator were prompted into attempting an ALTER through this tool, the tool cannot do it. Layer two is agent-level: the tool name appears in exactly two fences (db-migrator and incident-responder), so the other eight agents do not have the capability at all; granting an MCP tool and granting access are the same act, one name in one YAML list. And beneath both, the guard hook still watches Bash for destructive SQL smuggled through psql, a third net with a different weave.
+
+Two operational notes that matter when you build this yourself. The exact tool name is defined by the server implementation, not by you: if the awslabs server renames its tool, or you swap in a different postgres MCP server whose query tool has another name, the fence grant `mcp__postgres__run_query` silently stops matching anything, and the agent loses its eyes with no error at load time; this is why the verification habit says re-probe agents holding MCP names after any change to .mcp.json. And during genesis the tool has nothing to talk to at first: in Phase 4a the world has no live database yet, which is why that prompt explicitly licenses skipping the inspect step once, and says so in the report, rather than letting skipping become normal.
+
+Last, why a dedicated MCP tool instead of just letting the migrator run psql through Bash, which it technically could? It is done because the MCP route is where read-only can be enforced at the server level, results come back structured rather than as terminal scrapings, and credentials live in the server's environment rather than on command lines in transcripts. The Bash route cannot promise any of that, which is exactly the difference between an engineered eye and an open hand.
+
+The prefixed name is manufactured at session start out of two ingredients that exist independently: a server program that defines tools, and a config entry that registers the server. Neither contains the string `mcp__postgres__run_query`; Claude Code derives it. Walking the full lifecycle makes each piece obvious.
+
+Ingredient one: the server program. An MCP server is an ordinary program, in any language, that speaks the Model Context Protocol: JSON-RPC messages over stdin/stdout (or HTTP for remote servers). To qualify, it must answer three requests. `initialize` performs the handshake. `tools/list` returns the catalog of tools the server offers, and this is where a tool is truly created: each entry carries a name (`run_query`), a human-readable description, and a JSON schema for its parameters (for run_query, an object with an `sql` string). `tools/call` executes a named tool with given arguments and returns the result. Writing a server is small work with the SDKs; a complete one in Python:
+
+```python
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("ledger")
+
+@mcp.tool()
+def lookup_version(library: str) -> str:
+    """Return the pinned version of a library from build.sbt's ledger."""
+    import re, pathlib
+    text = pathlib.Path("build.sbt").read_text()
+    m = re.search(rf'val {library}Version\s*=\s*"([^"]+)"', text)
+    return m.group(1) if m else "not pinned"
+
+mcp.run()
+```
+
+The decorator registers the function in the `tools/list` catalog, with the docstring as its description and the type hints compiled into the parameter schema. That is all a tool is on the server side: a name, a description, a schema, and a handler.
+
+Ingredient two: the registration. Claude Code learns the server exists from configuration, in this project the checked-in `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.postgres-mcp-server@latest", "--readonly", "true"],
+      "env": { "DATABASE_URL": "${DATABASE_URL}" }
+    },
+    "ledger": { "type": "stdio", "command": "uv", "args": ["run", "ledger.py"] }
+  }
+}
+```
+
+The key under `mcpServers` is the server's name as this project knows it, and it is the first half of the eventual tool name. The entry says how to start or reach the server: for stdio, a command to spawn as a child process; for remote servers, a URL. Note that server-level policy lives here too: the `--readonly true` argument is an instruction to the server program itself, which is why that enforcement survives anything the model says. The same registration can also be done from the CLI (`claude mcp add ...`) into project, user, or local scope; the checked-in file is used here so every human, agent, and CI run gets identical wiring.
+
+The manufacture, at session start. When you run `claude`, the runtime reads the config, spawns each stdio server as a child process (or connects to each URL), performs the `initialize` handshake, and calls `tools/list` on each. For every tool each server advertises, it constructs a runtime tool named `mcp__<serverName>__<toolName>`: the config key, the advertised name, double underscores as separators. So the postgres server's `run_query` becomes `mcp__postgres__run_query`, and the toy server above would yield `mcp__ledger__lookup_version`. From that moment these are tools like any other: their descriptions and schemas are shown to the model, the model can propose calls to them, and, crucially for this project, the names participate in every control surface: an agent's fence lists them to grant them, permission rules can match them, and a hook matcher like `mcp__.*` catches all of them.
+
+A call, end to end: an agent proposes `mcp__postgres__run_query` with `{sql: "select ... from information_schema.columns ..."}`. The runtime checks the proposing agent's fence (is the name granted?), the permission lists, and PreToolUse hooks, then translates the proposal into a `tools/call` request to the postgres child process. The server executes it against the DATABASE_URL from its environment, applies its own policy (read-only refuses writes), and returns the result content, which the runtime hands back into the agent's context as the tool result. The server process lives for the duration of the session; the tools live exactly as long as the server that advertises them.
+
+Three consequences follow from this manufacture, and all three matter to the workflow writer. First, you do not choose the tool names: the server's author does, and the config key does. A fence grant like `mcp__postgres__run_query` is therefore a dependency on someone else's naming, and if the server renames its tool or you switch server implementations, the grant silently matches nothing, with no error at load time; hence the rule to re-probe fenced agents after any `.mcp.json` change. Second, tool descriptions are routing surfaces just like agent descriptions: the model decides when to use an MCP tool by reading the description the server advertised, so a badly described tool goes unused or misused, and when you write your own servers, the description rules from this tutorial apply verbatim. Third, every advertised tool's schema occupies context in every session that loads it, so a server that exposes forty tools taxes everyone for the three you need; prefer narrow servers, and treat "which servers do we load" as a design decision with the same budget discipline as everything else in CLAUDE.md.
+
+<a name="appendixL"></a>
+## Appendix L: Automating the orchestrator as a Scala 3 driver program
+
+Here we show how to create a driver program that runs each agent as a fresh headless Claude Code session, parses its report against the report contracts, gates on oracles instead of self-reports, runs the BLOCKED-ON repair loop, and halts at every disposal boundary. The design premise from before survives intact in code: sequencing and routing are automatable, the four disposal acts are not, so the driver treats proposals as terminal states.
+
+The orchestrator is operational machinery, so in this project it is a script-class artifact: one file, `scripts/orchestrator.scala`, owned by the infra-engineer, runnable with scala-cli, using the house JSON library. Process handling is os-lib for brevity; if you prefer the application's cats-effect style, every `def` below becomes an `IO` and nothing else changes structurally.
+
+Agents are an enum; a work order is data; an outcome is what interpretation produces. Interpretation is possible at all only because the agent files specify report contracts (BLOCKED-ON fields, APPROVE and REQUEST_CHANGES verdicts): the report contract is an API, and this is the client.
+
+```scala
+//> using scala "3.3.6"
+//> using dep "com.lihaoyi::os-lib:0.11.4"
+//> using dep "com.lihaoyi::upickle:4.2.1"
+
+import scala.util.matching.Regex
+
+enum Agent(val id: String):
+  case DbMigrator   extends Agent("db-migrator")
+  case Implementer  extends Agent("feature-implementer")
+  case TestEngineer extends Agent("test-engineer")
+  case Reviewer     extends Agent("code-reviewer")
+  case BuildEng     extends Agent("build-engineer")
+  case InfraEng     extends Agent("infra-engineer")
+
+object Agent:
+  def fromId(s: String): Option[Agent] = Agent.values.find(_.id == s.trim)
+
+final case class WorkOrder(
+    agent: Agent,
+    objective: String,          // one sentence, imperative
+    pastedReports: List[String] = Nil, // fresh contexts: reports travel by paste
+    constraints: List[String]   = Nil
+):
+  def prompt: String =
+    val inputs = pastedReports.zipWithIndex
+      .map((r, i) => s"Input report ${i + 1}:\n$r").mkString("\n\n")
+    s"""Use the ${agent.id} agent to $objective.
+       |${constraints.mkString("\n")}
+       |$inputs""".stripMargin
+
+enum Outcome:
+  case Completed(report: String)
+  case Blocked(artifact: String, owner: Agent, evidence: String, report: String)
+  case ChangesRequested(findings: String)
+  case ProposalPending(kind: String, report: String) // terminal: human disposes
+  case Failed(reason: String)
+```
+
+One work order becomes one fresh `claude -p` process in the repository, with a turn budget and JSON output. Every invocation's raw output is persisted, because an unattended run's only accountability is its evidence trail. (Verify the JSON field name once against your CLI version with `claude -p "hi" --output-format json`; the final text rides in a `result` field.)
+
+```scala
+val repo = os.pwd
+
+def invoke(order: WorkOrder, maxTurns: Int = 40): Either[String, String] =
+  val res = os.proc(
+    "claude", "-p", order.prompt,
+    "--output-format", "json",
+    "--max-turns", maxTurns.toString
+  ).call(cwd = repo, check = false, stderr = os.Pipe)
+
+  val logDir = repo / ".orchestrator" / "logs"
+  os.makeDir.all(logDir)
+  os.write.over(logDir / s"${System.currentTimeMillis()}-${order.agent.id}.json",
+                res.out.text() + "\n--- stderr ---\n" + res.err.text())
+
+  if res.exitCode != 0 then Left(s"claude exited ${res.exitCode}: ${res.err.text().take(400)}")
+  else Right(ujson.read(res.out.text())("result").str)
+```
+
+The parser greps for the canonical tokens the report contracts mandate, in priority order: proposals first (they end the run for a human), then blocks, then review verdicts, then plain completion. Note what makes this robust: it is not natural-language understanding, it is contract checking, and it works exactly to the degree the agent files' report sections were written as APIs.
+
+```scala
+val BlockedRe: Regex =
+  raw"(?s)BLOCKED-ON:\s*(.+?)\s*\(owner:\s*([a-z\-]+)\)\s*.*?Evidence:\s*(.+?)(?:State left|$$)".r
+
+val ProposalMarkers = List(
+  "ratification"    -> "constitutional diff",
+  "terraform plan"  -> "infrastructure plan",
+  "sign-off"        -> "destructive DDL",
+  "upgrade PR"      -> "dependency PR"
+)
+
+def interpret(report: String): Outcome =
+  ProposalMarkers.collectFirst {
+    case (marker, kind) if report.toLowerCase.contains(marker) =>
+      Outcome.ProposalPending(kind, report)
+  }.getOrElse {
+    BlockedRe.findFirstMatchIn(report) match
+      case Some(m) =>
+        Agent.fromId(m.group(2)) match
+          case Some(owner) => Outcome.Blocked(m.group(1).trim, owner, m.group(3).trim, report)
+          case None        => Outcome.Failed(s"BLOCKED-ON names unknown owner: ${m.group(2)}")
+      case None =>
+        if report.contains("REQUEST_CHANGES") then Outcome.ChangesRequested(report)
+        else Outcome.Completed(report)
+  }
+```
+
+Stages advance on exit codes, never on the model's own account of success. And the driver's commit step refuses to touch constitutional paths, which is the disposal boundary written as code: the automated orchestrator can commit ordinary artifacts (reversible, pre-approved acts) but must leave anything under `.claude/` staged for your ratify sequence.
+
+```scala
+def oracle(cmd: String*): Boolean =
+  os.proc(cmd).call(cwd = repo, check = false).exitCode == 0
+
+def stagedConstitutional(): Boolean =
+  os.proc("git", "diff", "--cached", "--name-only").call(cwd = repo)
+    .out.lines().exists(p =>
+      p.startsWith(".claude/") || p == "CLAUDE.md" || p.startsWith("docs/agents"))
+
+def commitStage(msg: String): Either[String, Unit] =
+  os.proc("git", "add", "-A").call(cwd = repo)
+  if stagedConstitutional() then
+    Left("constitutional files staged: stopping for human ratification (review, commit, restart)")
+  else { os.proc("git", "commit", "-m", msg).call(cwd = repo); Right(()) }
+```
+
+The state machine with the repair loop. A stage is a work order plus its oracle. On Blocked, the driver dispatches the evidence to the named owner as a new work order, then re-runs the blocked stage fresh (idempotence makes the re-run safe by construction); a second block on the same stage halts for a human, because a second block means the plan or the ownership map is wrong, and that is a matrix question, not a retry question.
+
+```scala
+final case class Stage(name: String, order: WorkOrder, gate: () => Boolean)
+
+def runStage(stage: Stage, retried: Boolean = false): Outcome =
+  invoke(stage.order) match
+    case Left(err) => Outcome.Failed(err)
+    case Right(report) =>
+      interpret(report) match
+        case b @ Outcome.Blocked(artifact, owner, evidence, _) if !retried =>
+          println(s"[${stage.name}] blocked on $artifact; routing to ${owner.id}")
+          val fix = WorkOrder(owner,
+            s"resolve this dependency reported by ${stage.order.agent.id}: $artifact",
+            pastedReports = List(evidence))
+          invoke(fix) match
+            case Right(_) => runStage(stage, retried = true) // fresh re-run, no memory needed
+            case Left(e)  => Outcome.Failed(s"repair dispatch failed: $e")
+        case c @ Outcome.Completed(rep) =>
+          if stage.gate() then c
+          else Outcome.Failed(s"[${stage.name}] agent reported done but the oracle is red")
+        case other => other
+
+@main def featureLoop(description: String): Unit =
+  val implement = Stage("implement",
+    WorkOrder(Agent.Implementer, s"implement: $description",
+      constraints = List("Ship tests with the change. Report dependencies you need added.")),
+    () => oracle("sbt", "check"))
+
+  val harden = (implReport: String) => Stage("harden",
+    WorkOrder(Agent.TestEngineer, "attack the change per your mission categories",
+      pastedReports = List(implReport)),
+    () => true) // red tests here are information, not failure
+
+  val review = Stage("review",
+    WorkOrder(Agent.Reviewer, "review the full diff, all axes, verified findings only"),
+    () => oracle("sbt", "check"))
+
+  runStage(implement) match
+    case Outcome.Completed(r1) =>
+      runStage(harden(r1)) match
+        case Outcome.Completed(_) | Outcome.ChangesRequested(_) =>
+          runStage(review) match
+            case Outcome.Completed(_) =>
+              commitStage(s"feature: $description").fold(halt, _ => println("loop green; /deploy is yours"))
+            case Outcome.ChangesRequested(f) => halt(s"reviewer findings need routing:\n$f")
+            case other                       => halt(other.toString)
+        case other => halt(other.toString)
+    case other => halt(other.toString)
+
+def halt(reason: String): Unit =
+  println(s"ORCHESTRATOR HALT: $reason"); sys.exit(2)
+```
+
+Run it as `scala-cli scripts/orchestrator.scala --main-class featureLoop -- "add task priorities"`.
+
+What this preserves from the manual design, stated once because each is one line of the code above: fresh session per stage (each `invoke` is a new process, so reports travel by paste in `pastedReports`); oracles decide progression (`stage.gate`, not the report text); the repair loop passes through the driver, never agent to agent; every transcript is persisted; turn budgets bound thrash; and all four proposal kinds, plus any constitutional file touch, are terminal halts that leave the artifact staged for your ratify, apply, merge, or sign-off. What it deliberately does not do is also worth naming: it never calls `/deploy` on its own (leave W9 to a human or a separately gated trigger until this loop has bored you), and it never widens itself, because `scripts/orchestrator.scala` is infra-engineer territory, which means changes to the driver go through the same review as changes to `deploy.sh`. The orchestrator that automates the agents is, itself, just another artifact with an owner.
