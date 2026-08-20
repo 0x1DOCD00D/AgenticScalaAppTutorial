@@ -4,9 +4,9 @@
 
 ---
 
-## What this book is, and how to read it
+## What this tutoria is, and how to read it
 
-This tutorial teaches two skills that together constitute *agentic engineering* in Claude Code:
+This tutorial teaches two skills that together constitute *agentic engineering* in Claude Code as follows.
 
 1. **Building the agents** (Parts A–C): the mental model, the architecture method, and the file-by-file, field-by-field, line-by-line construction of every agent, subagent, and supporting structure — with the complete final text of each file inline and the reasoning behind every line attached at the point of decision.
 2. **Having the agents build everything else** (Parts D–E): the *genesis narrative* — starting from an empty directory, the human writes **zero application code**; the agent team generates the entire Scala 3 three-tier codebase, its tests, its infrastructure, deploys it to AWS, and then operates and maintains it. Every phase is given as: preconditions → the exact prompt → what happens mechanically (tool call by tool call, hook by hook) → the expected report → your verification gate → the failure branch.

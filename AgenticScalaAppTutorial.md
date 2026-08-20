@@ -1063,7 +1063,7 @@ Step 8.3. What happens, and why:
 Step 8.4. Your gate, the second constitutional-grade review. Read the plan resource by resource (about forty), apply, and record the outputs:
 
 ```bash
-cd infra/terraform
+cd terraform
 terraform init && terraform plan     # read it all; then:
 terraform apply                      # takes ~10 minutes; RDS is slow
 terraform output                     # note alb_dns_name for Phase 9
@@ -1075,7 +1075,7 @@ git add -A && git commit -m "genesis 8: infrastructure and scripts by infra-engi
 
 Goal: the application, live on AWS, deployed and gated by the deploy-engineer.
 
-Step 9.1. Push all commits to your remote if CI is set up later; then, in a fresh session:
+Step 9.1. Push all commits to your remote if CI is set up later; then, in a fresh session execute the following command.
 
 ```text
 /deploy staging
