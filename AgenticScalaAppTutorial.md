@@ -1002,7 +1002,7 @@ Step 6.1. Fresh session. Prompt, verbatim:
 
 Step 6.2. Where the two oddly specific clauses come from. The recoverWith clause and the explicit GET / redirect were review findings in an earlier run of this project: handleErrorWith takes a total function, so a partial match inside it turns unmatched exceptions into MatchError and destroys the original stack trace; and the static resource service maps exact paths only, so GET / returns 404 without the redirect. Findings become specification: once a reviewer catches a defect class, the next genesis carries the immunization in the work order.
 
-Step 6.3. Your gate, with the one manual moment of theater:
+Step 6.3. Your gate: run the app locally and verify in the browser the frontend.
 
 ```bash
 docker compose up -d db
@@ -1016,11 +1016,11 @@ git add -A && git commit -m "genesis 6: web tier and frontend"
 
 Goal: the entire codebase reviewed by the agent that cannot edit.
 
-Step 7.1. Fresh session. Prompt:
+Step 7.1. Fresh session. Run the following prompt to perform code review.
 
 > Use the code-reviewer agent on the full repository state (diff against the empty tree: everything is new). Full procedure, all axes, verified findings only.
 
-Step 7.2. What happens, and why:
+Step 7.2. What may happen and how to explain it and fix it.
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -1039,7 +1039,7 @@ git add -A && git commit -m "genesis 7: review findings resolved"
 
 Never fix findings inside the review session. The reviewer has no hands by design, and the writer/checker separation holds even when the human is tempted to shortcut it.
 
-### Phase 8: infrastructure and scripts
+### Phase 8: cloud infrastructure and scripts
 
 Goal: `infra/terraform` (VPC, security groups chained ALB to app to db, RDS with its password only in Secrets Manager, ECR with immutable SHA tags, ECS cluster and service with a deployment circuit breaker, ALB health-checking /healthz, CloudWatch alarms to SNS, outputs) and `scripts/` (deploy.sh, rollback.sh, smoke-test.sh). One owning agent authors both; you apply.
 
@@ -1047,7 +1047,7 @@ Step 8.1. Fresh session. The infrastructure prompt:
 
 > Use the infra-engineer agent to design and write infra/terraform for TaskForge on AWS: VPC (public subnets: ALB only; private: app plus RDS), security groups chained ALB to app:8080 to db:5432; RDS Postgres 16 (encrypted, 7-day backups, deletion protection, password generated into Secrets Manager only, injected via the ECS task definition secrets block); ECR (immutable SHA tags, scan on push); ECS cluster plus Fargate task definition (execution role reads exactly the one secret; task role empty) plus service with deployment circuit breaker (enable plus rollback) and lifecycle ignore_changes on task_definition; ALB health-checking /healthz; four CloudWatch alarms (ALB 5xx, unhealthy hosts, RDS CPU, RDS connections) to SNS; outputs: alb_dns_name, ecr url, cluster and service names, log group. Backend: the S3 bucket and DynamoDB lock table from Session 0 (fill in the names). Run terraform validate and plan; present the plan; I will apply it myself.
 
-Step 8.2. The scripts prompt, same session or fresh:
+Step 8.2. Run the scripts prompt specified below, same session or fresh.
 
 > Use the infra-engineer agent to write scripts/deploy.sh (refuse a dirty tree; APP_VERSION=git SHA sbt Docker/publishLocal; push to ECR; register a new task-definition revision with the new image via the AWS CLI; update the service; wait services-stable; VERIFY the service landed on the new revision, since the circuit breaker makes bare stable ambiguous, and exit 2 with evidence if not), scripts/rollback.sh (previous revision; wait; report), scripts/smoke-test.sh (healthz; readyz; a create/advance/delete round-trip; loud failures). Bash strict mode; greppable ==> step markers; no interactive prompts. Run bash -n on all three; report each script's gates.
 
