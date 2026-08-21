@@ -1,40 +1,17 @@
-# AgenticScalaAppTutorial
+# From One Prompt to Ten AI Agents to a Working AWS Three-Tier Application
 
-A self-contained, step-by-step tutorial in which Claude Code agents create an entire Scala 3 three-tier web application from scratch: the build definition, all source code, tests, database schema, AWS infrastructure, and CI pipelines. You, the reader, write no application files. You run commands, give prompts, review, and ratify. Every step below states the exact command or prompt to use, what the agent does, and which line of which agent file causes it to do that.
+A self-contained, step-by-step tutorial in which Claude Code agents create an entire Scala 3 three-tier web application from scratch: the build definition, all source code, tests, database schema, AWS infrastructure, and CI pipelines. You, the reader are a software architect, you write no application files - you give prompts, review, and ratify as if you manage a team of software engineers whom you instruct what to do. Every step below states the exact command or prompt to use, what the agent does, and which line of which agent file causes it to do that.
 
-The example application is called TaskForge: a task manager with an http4s web tier, a pure business-logic tier on cats-effect IO, and a doobie/PostgreSQL data tier, using upickle for all JSON, packaged by sbt-native-packager, and deployed on AWS ECS Fargate behind an ALB with RDS PostgreSQL.
+The example application is called [TaskForge](http://taskforge-dev-alb-1458962824.us-east-1.elb.amazonaws.com/index.html): a task manager with an http4s web tier, a pure business-logic tier on cats-effect IO, and a doobie/PostgreSQL data tier, using upickle for all JSON, packaged by sbt-native-packager, and deployed on AWS ECS Fargate behind an ALB with RDS PostgreSQL. The generated application is [publicly available at Github](https://github.com/0x1DOCD00D/AgenticWorkflow).
 
-## Table of contents
-
-- [1. What you will build](#1-what-you-will-build)
-- [2. How agent instructions become actions](#2-how-agent-instructions-become-actions)
-- [3. Prerequisites and Session 0](#3-prerequisites-and-session-0)
-- [4. The authority matrix](#4-the-authority-matrix)
-- [Phase 0: the seed agent](#phase-0-the-seed-agent)
-- [Phase 1: the factory builds the factory](#phase-1-the-factory-builds-the-factory)
-- [Phase 2: build-engineer creates build.sbt and the project skeleton](#phase-2-build-engineer-creates-buildsbt-and-the-project-skeleton)
-- [Phase 3: the domain and the wire format](#phase-3-the-domain-and-the-wire-format)
-- [Phase 4: schema and data tier](#phase-4-schema-and-data-tier)
-- [Phase 5: service tier and adversarial tests](#phase-5-service-tier-and-adversarial-tests)
-- [Phase 6: web tier and frontend](#phase-6-web-tier-and-frontend)
-- [Phase 7: full review](#phase-7-full-review)
-- [Phase 8: infrastructure and scripts](#phase-8-infrastructure-and-scripts)
-- [Phase 9: first deploy](#phase-9-first-deploy)
-- [Phase 10: pipelines](#phase-10-pipelines)
-- [11. After genesis: the operating loops](#11-after-genesis-the-operating-loops)
-- [Appendix A: the seed agent file](#appendix-a-the-seed-agent-file)
-- [Appendix B: the build-engineer file](#appendix-b-the-build-engineer-file)
-- [Appendix C: the other eight agents at a glance](#appendix-c-the-other-eight-agents-at-a-glance)
-- [Appendix D: troubleshooting](#appendix-d-troubleshooting)
-
-## 1. What we will build
+## 1. Planning a software application
 
 In this tutorial we explain how to create the following components.
 
 1. An agent system (the "factory"): ten Claude Code subagents, a project memory file, three safety hooks, a permission policy, and MCP server wiring. All of it lives in ordinary files in the repository.
 2. The application, produced by that agent system phase by phase: build definition, domain model, database schema and access layer, business rules, HTTP API and browser frontend, test suites, Terraform for AWS, deploy scripts, and GitHub Actions workflows.
 
-The orchestrator is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
+The _orchestrator_ is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
 
 | | Orchestrator | Subagent |
 |---|---|---|
