@@ -22,16 +22,16 @@ The _orchestrator_ is the main Claude Code session where the conversation you ar
 | Talks to the human architect | continuously | never; it returns one report, to the orchestrator |
 | Plan mode                    | available; the convention is planning starts there | not applicable |
 
-Its function in the workflow is the hub of the W-chain in [diagram 4](#diagram-4-the-operational-workflow). The human architect - you! - gives intent (W1); the orchestrator plans, ideally in plan mode where it can read everything but change nothing; then it issues work orders in sequence (W2 through W9), each addressed to the owner from the ownership map, each carrying the specifics of this one job plus any prior report pasted in, because pasted reports are the only memory that crosses between agents. It runs the BLOCKED-ON repair loop when an agent stops on a missing dependency: read the report, route the evidence to the owning agent, gate the fix, re-run the blocked agent fresh. And it synthesizes outcomes back to you. The working analogy is a general contractor or an engineering manager: it holds the whole story, judges and routes, and does no specialty work itself.
+Its function in the workflow is the hub of the W-chain in [diagram 4](#diagram-4-the-operational-workflow). The human architect - you! - gives intent (W1); the orchestrator plans, ideally in plan mode where it can read everything but change nothing; then it issues work orders in sequence as W2 through W9, each addressed to the owner from the ownership map, each carrying the specifics of this one job plus any prior report pasted in, because pasted reports are the only memory that crosses between agents. The orchestrator runs the BLOCKED-ON repair loop when an agent stops on a missing dependency: read the report, route the evidence to the owning agent, gate the fix, re-run the blocked agent fresh. And it synthesizes outcomes back to the human architect. The working analogy for the orchestrator is an engineering manager: it holds the whole story, judges and routes, and does no specialty work itself.
 
-Why the design needs such a thing at all comes down to two asymmetries. First, breadth versus narrowness: planning requires seeing the whole repository, your intent, and every report at once, while executing requires a narrow, clean context; the orchestrator is where the breadth deliberately lives, and it is the reason subagent contexts can afford to be narrow. Second, auditability: subagents routing work directly to each other would dissolve the trail and let one misjudgment cascade unsupervised, so the topology is hub and spoke, with every hop passing through the one context you can watch.
+This design is based on two asymmetries. First, breadth versus narrowness where planning requires seeing the whole repository, the intent of the human architect, and every report at once, while executing requires a narrow, clean context; the orchestrator is where the breadth deliberately lives, and it is the reason subagent contexts can afford to be narrow. Second, it is auditability - subagents routing work directly to each other would dissolve the trail and let one misjudgment cascade unsupervised, so the topology is hub and spoke, with every hop passing through the one context you can watch.
 
-What governs it, given that it has no fence file: three things. CLAUDE.md loads into it like into everyone, and the ownership hard rule binds it explicitly; this matters because the orchestrator holds broad tools, so its standing temptation is to just do the work inline (write the code, edit the build) instead of delegating, which would quietly make it an unaccountable eleventh owner. The floor applies to it fully; hooks and permission rules do not distinguish orchestrator from subagent tool calls. And the authority matrix gives it a row of its own: it may plan, decompose, delegate, paste reports, and run the repair loop; it must never perform a specialty inline or bypass an owner; it escalates routing ambiguities and matrix gaps to you.
+Three components governs the agentic workflow, given that it has no fence file. The orchestrator is bound by the same constitution as the agents: CLAUDE.md loads into its context at session start, and the hard rule about one owner per artifact class applies to it by name. This rule exists because the orchestrator is the one context that holds broad tools, so nothing physical stops it from writing the code or editing the build itself instead of delegating. If it did, the work would bypass every gate that makes the agents accountable, and the system would gain a hidden eleventh owner that no matrix row describes. The floor applies to it fully; hooks and permission rules do not distinguish orchestrator from subagent tool calls. And the *authority matrix* gives it a row of its own: it may plan, decompose, delegate, paste reports, and run the repair loop; it must never perform a specialty inline or bypass an owner; it escalates routing ambiguities and matrix gaps to you.
 
-Two clarifications that resolve most confusions about it. The orchestrator is a role, not a persistent entity: each new session (and the tutorial's convention is one phase per session) births a fresh orchestrator, re-anchored by CLAUDE.md, with no memory of previous sessions except what the repository and your prompts carry. And it is the same base model as every agent it delegates to; the difference between the orchestrator and, say, the feature-implementer is not intelligence or identity but constraint: one is the model with the whole conversation and no role file, the other is the same model with a fresh context, a system prompt, and a fence. In this system, who you are is what loads around you. 
+The orchestrator is a role, not a persistent entity - each new session (and the tutorial's convention is one phase per session) births a fresh orchestrator, re-anchored by CLAUDE.md, with no memory of previous sessions except what the repository and your prompts carry. And it is the same base model as every agent it delegates to; the difference between the orchestrator and, say, the feature-implementer is not intelligence or identity but constraint: one is the model with the whole conversation and no role file, the other is the same model with a fresh context, a system prompt, and a fence.
 
 ### Ownership matrix and the agentic workflow
-The ten agents and what each one owns are specified in an ownership table below, created by a human architect who knows what agents are needed. This table answers one question per agent: what does it create and own? That is the "may" side of authority, restricted to artifact creation.
+The ten agents and what each one owns are specified in an ownership table below, created by a human architect who knows what agents are needed. This table answers one question per agent: what does it create and own? That is the "may" side of the authority, restricted to artifact creation.
 
 | Agent | Creates and owns |
 |---|---|
@@ -46,29 +46,91 @@ The ten agents and what each one owns are specified in an ownership table below,
 | incident-responder | diagnosis and incident reports in docs/incidents |
 | dependency-updater | version numbers in the build's version ledger, on a weekly schedule |
 
-When you create the ownership table you are answering the chief architect's classic questions. 
-- What jobs does this project contain? 
-- Where do I draw responsibility boundaries? 
+When the human creates the ownership table s/he is answering the chief architect's classic questions. 
+- What jobs does this project contain?
+- Where do I draw responsibility boundaries?
 - Do I want one full-stack generalist or specialists? 
-- Should the person who writes the code be the person who reviews it (no)? 
+- Should the person who writes the code be the person who reviews it? 
 
-The split tests from the tutorial are hiring logic in disguise: different tools means a different role, checker and checked must be different people, high-blast-radius duties get isolated into their own position, and scheduled work gets its own description. Even the anti-split test is a headcount instinct: do not create two positions that would share ninety percent of a job description. And the routing descriptions are literally job postings written so work finds the right desk.
+The split tests from the tutorial are hiring logic in disguise: different tools means a different role, checker and checked must be different people, high-blast-radius duties get isolated into their own position, and scheduled work gets its own description. Even the anti-split test is a headcount instinct: do not create two positions that would share a large percentile of a job description. And the routing descriptions are literally job postings written so work finds the right desk and a hired human behind this desk.
 
-However, you are not selecting workers for hire; you are authoring them. Hiring is choosing among pre-existing people with fixed skills, habits, and personalities you can only discover, never specify. Here every candidate is the same base model, and the job description is not a filter for the worker; it is the worker. There is no interview because there is no variance in the candidate; all the variance is in your specification. Consequence: competence is not what you design for (it comes with the model, uniformly), scope and constraint are. A bad hire is a selection error; a bad agent is a writing error, and it is always yours.
+However, we are not selecting workers for hire literally; we are authoring them! Hiring is choosing among pre-existing people with fixed skills, habits, and personalities we can only discover, never specify. Here every candidate is the same base model, and the job description is not a filter for selecting the worker; it is the worker. There is no interview because there is no variance in the candidate; all the variance is in our specification! As a result, competence is not what you design for, since it comes with the model, uniformly, scope and constraint are the key elements of competence. A bad hire is a selection error; a bad agent is a writing error and it is always yours.
 
-Moreover, your employees are amnesiac, so the institution's memory must be externalized. A human hire accumulates context, learns the codebase, remembers last month's incident. An agent starts blank every single invocation. So "staffing" here includes building what human organizations get biologically for free: CLAUDE.md is institutional memory, reports-pasted-forward are meetings, docs/agents.md is the org chart everyone actually reads. A chief architect hires people and culture grows; you must write the culture down or it does not exist.
+Moreover, your employees are amnesiac, so the institution's memory must be externalized. A human hire accumulates context, learns the codebase, remembers last month's incident. An agent starts blank every single invocation. So "staffing" here includes building what human organizations get biologically for free: CLAUDE.md is institutional memory, reports-pasted-forward are meetings, docs/agents.md is the org chart. The chief architect at a real company hires people and culture grows; in the case of AI agentic workflow we must write the culture down or it does not exist.
 
-Next, the enforcement model inverts. With humans, a job description states duties, and enforcement is soft and social: performance reviews, professional norms, the fact that people push back on bad orders and have self-preservation. Agents comply eagerly with almost anything, including bad ideas, so limits cannot be normative; they must be structural. That is why the ownership table does not stay a duties document but compiles down into fences, permission rules, and hooks. The nearest human-world artifact is not an org chart at all; it is an RBAC security policy. Hiring trusts judgment; this system trusts mechanism, and never the worker: you trust the gates and oracles around the agent, the way you would never operate with a human colleague you respected.
+Next, the enforcement model inverts. With humans, a job description states duties, and enforcement is soft and social: performance reviews, professional norms, the fact that people push back on bad orders or slack off. Agents comply eagerly with almost anything, including bad ideas, so limits cannot be normative but structural. That is why the ownership table does not stay a duties document but compiles down into fences, permission rules, and hooks. The nearest human-world artifact is not an org chart at all; it is an RBAC security policy. Hiring trusts human judgment; this system trusts mechanism, and never the worker: you trust the gates and oracles around the agent, the way you would never operate with a human colleague unless you want a hostile work environment.
 
-In addition and crucially, the economics invert too. A human specialist costs a salary, so no sane architect hires a full-time "db-migrator" for a small product; roles get bundled because headcount is expensive. Agent roles cost nothing marginal to employ, so specialization is nearly free, and the real costs move elsewhere: every extra role adds routing surface (one more description that can misroute) and definition maintenance (one more file that can go stale). Ten specialists for a small app would be organizational malpractice with humans and is ordinary design here.
+In addition and crucially, the economics invert too. A human specialist costs a salary plus benefits, so no sane architect hires a full-time "db-migrator" for a small product; roles get bundled because headcount is expensive. Agent roles cost nothing marginal to employ, so specialization is nearly free, and the real costs move elsewhere: every extra role adds routing surface (one more description that can misroute) and definition maintenance (one more file that can go stale). Ten specialists for a small app would be organizational malpractice with humans and is ordinary design here.
 
-Finally, these ten employees are the same mind wearing different constraints. When a chief architect separates implementer from reviewer, independence comes free, from two different brains with different blind spots. Here the reviewer is the same model as the implementer, so independence must be manufactured: fresh contexts, adversarial framing in the reviewer's file, the no-write fence. The separation of duties that hiring gets by nature, you get only by engineering, which is why the tutorial spends so many words on it.
+Finally, these ten employees are the same mind wearing different constraints. When the chief architect separates implementer from reviewer, independence comes free from two different brains with different blind spots. Here the reviewer is the same model as the implementer, so independence must be manufactured with fresh contexts, adversarial framing in the reviewer's file, and the no-write fence. The separation of duties that hiring gets by nature, should be manufactured and we get it only by engineering, which is why the tutorial spends so many words on it.
 
 Therefore, the ownership table is the org chart and _Responsible, Accountable, Consulted, and Informed (RACI)_ matrix of a team you author rather than hire, whose members forget everything between shifts, comply with anything, cost nothing to multiply, and are all the same person. The authority matrix is that org chart fused with the security policy, because for this kind of employee the two documents cannot be separate. Where the analogy is most exact is the moment before any of that: deciding what jobs the work actually divides into. That decision is identical in both worlds, and the tutorial's claim stands in both too: delegation forces the explicitness that human teams fake with tribal knowledge. The difference is that a human team survives your vagueness, and this one turns it directly into behavior.
 
 The rule that makes the whole design work is the following: every artifact class has exactly one owning agent, and an agent asked to touch another agent's artifact declines and names the owner. You will see this rule fire in practice in [Phase 1](#phase-1-the-factory-builds-the-factory), probe 3.
 ![img_1.png](img_1.png)
 
+---
+
+### The cost of the same build with human specialists
+
+A fair question is whether it is not cheapter to hire actual people to create this application. What would this repository have cost if you had hired people instead of running the factory? To make practical sense of this tutorial we work the estimate with US-market ranges as of mid 2026: [Scala Teams, senior Scala cost 2026](https://www.scalateams.com/blog/senior-scala-developer-cost-2026), [Arc.dev freelance rates](https://arc.dev/freelance-developer-rates), [Claude plan pricing](https://intuitionlabs.ai/articles/claude-pricing-plans-api-costs).
+
+
+#### What is actually being priced
+
+The deliverable is small but production-shaped, which drives the estimate more than line count does. It comprises the sbt build and scaffolding, a domain model with a frozen JSON wire format, a Flyway schema, a doobie data tier, a pure service tier with rule tests, an http4s API with a browser frontend and a full route suite, an adversarial test pass, a full review, Terraform for a cloud VPC, RDS, ECR, ECS Fargate, an ALB, alarms, and Secrets Manager wiring (roughly 40 resources), three operational scripts with real gates, and three CI workflows including a headless maintenance loop. Deployed and verified, not just written.
+
+The mapping from the ten agents to human hires is not one-to-one, because humans consolidate roles. In practice this is a two-person job plus fractions: one senior Scala engineer covering build, domain, data, service, web, and tests; one DevOps or platform engineer covering Terraform, scripts, and CI; a fraction of a second senior for independent code review; and a fraction of a coordinator. The work-package estimate:
+
+| Work package | Specialist | Hours |
+|---|---|---|
+| Build definition, scaffolding, local compose | senior Scala engineer | 8 to 16 |
+| Domain, schema, data tier, service tier, web tier, frontend | senior Scala engineer | 60 to 100 |
+| Adversarial test hardening | same, or an SDET | 16 to 24 |
+| Terraform (VPC, RDS, ECS, ALB, alarms, secrets) | DevOps engineer | 32 to 56 |
+| Deploy, rollback, smoke scripts plus three workflows | DevOps engineer | 12 to 24 |
+| Independent code review, two passes | second senior engineer | 8 to 16 |
+| Coordination, standups, handoffs | 10 to 15 percent overhead | 14 to 24 |
+
+Total: roughly 150 to 260 hours, or 4 to 6.5 person-weeks. Anyone who has contracted out a deployed three-tier service will recognize that as a normal, even slightly optimistic, range.
+
+#### Pricing the hours, four ways
+
+Rates vary enormously by channel, so the same hours price out very differently depending on how you buy them. Senior Scala contractors through US staffing firms currently run $150 to $250 per hour; independent freelancers hired directly typically run $90 to $150; specialist consultancies bid fixed prices that back out to $175 to $275 blended; offshore and nearshore teams run $30 to $70 with higher coordination overhead. For the employee lens, median senior Scala total compensation in major US hubs sits around $230k to $260k, and a fully loaded employee costs 25 to 40 percent above that.
+
+| Staffing model | Blended rate | Cost for 150 to 260 hours |
+|---|---|---|
+| Independent freelancers, hired directly | $90 to $150 per hour | $14k to $39k |
+| Staffing-firm contractors | $150 to $250 per hour | $23k to $65k |
+| US consultancy, fixed bid | $175 to $275 effective | $30k to $70k typical bids |
+| Offshore or nearshore team | $30 to $70 per hour | $5k to $18k plus overhead |
+| Internal employees, fully loaded | roughly $5.5k to $6.5k per person-week | $25k to $40k of internal cost |
+
+A defensible single sentence: built by competent US-market humans, this repository costs somewhere between $15k and $60k, with $25k to $40k the likely center. Calendar time is 3 to 6 weeks elapsed once you include finding the people, onboarding them, and their other commitments.
+
+#### What the agentic build actually cost
+
+The cost structure on the agentic side has three terms, and it is worth keeping them separate because they behave differently.
+
+The first term is the AI itself, and it is the smallest. A Claude Max subscription runs $100 or $200 per month depending on tier and covers a genesis comfortably; run against the metered API instead, a genesis of this size lands on the order of $50 to $300 of tokens depending on how many repair loops your run needs. Call it $100 to $300 of marginal cash.
+
+The second term is your time, and it is the dominant one. The genesis is roughly 8 to 16 hours of operator attention across the phases: reading the constitutional diff, reading build.sbt, reading the Terraform plan resource by resource, ratifying, probing, and disposing of drifts like the ones in [Phase 9](#phase-9-first-deploy). Priced at the same senior rate the human team charges, that is $1.2k to $4k. Note what kind of time it is - not one keystroke of it is typing code, and none of it can be delegated to someone who cannot read a Terraform plan, because the gates are exactly where the remaining judgment lives.
+
+The third term is AWS runtime, roughly $100 to $150 per month for this stack, and it cancels out of the comparison because both paths pay it identically. Total for the agentic path: roughly $1.5k to $4.5k, of which the AI is well under 10%. Against the human center of $25k to $40k, that is a factor of about 10, with honest bounds between 5x and 20x depending on which column you compare against. Elapsed time compresses harder than cost: one to two focused days against three to seven weeks.
+
+#### The caveats that keep the comparison honest
+
+First, the specification already existed. This tutorial is a refined requirements document, and the ranges assume the human team receives it too. In a real engagement, discovering what to build is often half the bill, and neither column above includes that discovery. Symmetrically, building the factory and its vocabulary cost real effort once, and that cost amortizes: a second application from the same factory skips Phase 0, Phase 1, and most of the wording work, so the ratio improves with every build.
+
+Second, the operator is not free and cannot be junior. This workflow is not about the speed of typing, but sound judgment; it concentrates the senior skill into a few review moments. If you must hire the operator, add their hours at senior rates, and the gap narrows though it does not close.
+
+Third, the human premium buys things the subscription does not: a firm carries warranty, insurance, continuity, and someone to call when it breaks at 3 a.m. The agentic path replaces that with your own [operating loops](#11-after-genesis-the-operating-loops) and your own accountability. For some buyers that difference is worth most of the premium.
+
+Fourth, this ratio is for genesis, not for lifetime. Steady-state maintenance compares a support retainer, typically $2k to $5k per month for a stack like this, against a subscription plus a few review hours per week, and the multiple there is real but smaller.
+
+Fifth, variance exists on both sides. A weak agency and a sloppy agent run both produce expensive messes; on the agentic side, the gates, the fences, and the review pass in [Phase 7](#phase-7-full-review) are what bound the variance, which is another way of saying the safety machinery in this tutorial is not overhead on the savings, it is the reason the savings survive contact with reality.
+
+The structural point beneath all the numbers: hiring humans prices the work linearly in hours typed, while the agentic path prices it linearly in decisions reviewed. The four disposal acts are the new unit of cost, and everything this tutorial spends words on, the vocabulary, the gates, the reports, exists to keep the number of decisions small and each one cheap to make well.
 
 ---
 
