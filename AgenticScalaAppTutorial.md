@@ -11,18 +11,18 @@ In this tutorial we explain how to create the following components.
 1. An agent system or *the factory*: ten Claude Code subagents, a project memory file, three safety hooks, a permission policy, and MCP server wiring. All of it lives in ordinary files in the repository.
 2. The application, produced by that agent system phase by phase: build definition, domain model, database schema and access layer, business rules, HTTP API and browser frontend, test suites, Terraform for AWS, deploy scripts, and GitHub Actions workflows.
 
-The _orchestrator_ is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens - we also show in [Appendix L](#appendix-l-automating-the-orchestrator-as-a-scala-3-driver-program) how to create a fully automated orchestrator. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
+The _orchestrator_ is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens - we also show in [Appendix L](#appendix-l-automating-the-orchestrator-as-a-scala-3-driver-program) how to create a fully automated orchestrator. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. This is the model of the application with no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
 
-| | Orchestrator | Subagent |
-|---|---|---|
-| Defined by | nothing; it is the default session | one file in .claude/agents/ |
-| Context | persists across the whole session; accumulates the plan, all reports, your decisions | fresh per invocation; sees only its file, CLAUDE.md, and the work order |
-| Tools | the full default set, bounded only by the floor | its fence |
-| Can delegate | yes; it is the only party that can | no; subagents cannot invoke each other |
-| Talks to you | continuously | never; it returns one report, to the orchestrator |
-| Plan mode | available; the convention is planning starts there | not applicable |
+|                              | Orchestrator | Subagent |
+|------------------------------|---|---|
+| Defined by                   | nothing; it is the default session | one file in .claude/agents/ |
+| Context                      | persists across the whole session; accumulates the plan, all reports, your decisions | fresh per invocation; sees only its file, CLAUDE.md, and the work order |
+| Tools                        | the full default set, bounded only by the floor | its fence |
+| Can delegate                 | yes; it is the only party that can | no; subagents cannot invoke each other |
+| Talks to the human architect | continuously | never; it returns one report, to the orchestrator |
+| Plan mode                    | available; the convention is planning starts there | not applicable |
 
-Its function in the workflow is the hub of the W-chain in diagram 4. You give intent (W1); the orchestrator plans, ideally in plan mode where it can read everything but change nothing; then it issues work orders in sequence (W2 through W9), each addressed to the owner from the ownership map, each carrying the specifics of this one job plus any prior report pasted in, because pasted reports are the only memory that crosses between agents. It runs the BLOCKED-ON repair loop when an agent stops on a missing dependency: read the report, route the evidence to the owning agent, gate the fix, re-run the blocked agent fresh. And it synthesizes outcomes back to you. The working analogy is a general contractor or an engineering manager: it holds the whole story, judges and routes, and does no specialty work itself.
+Its function in the workflow is the hub of the W-chain in [diagram 4](#diagram-4-the-operational-workflow). The human architect - you! - gives intent (W1); the orchestrator plans, ideally in plan mode where it can read everything but change nothing; then it issues work orders in sequence (W2 through W9), each addressed to the owner from the ownership map, each carrying the specifics of this one job plus any prior report pasted in, because pasted reports are the only memory that crosses between agents. It runs the BLOCKED-ON repair loop when an agent stops on a missing dependency: read the report, route the evidence to the owning agent, gate the fix, re-run the blocked agent fresh. And it synthesizes outcomes back to you. The working analogy is a general contractor or an engineering manager: it holds the whole story, judges and routes, and does no specialty work itself.
 
 Why the design needs such a thing at all comes down to two asymmetries. First, breadth versus narrowness: planning requires seeing the whole repository, your intent, and every report at once, while executing requires a narrow, clean context; the orchestrator is where the breadth deliberately lives, and it is the reason subagent contexts can afford to be narrow. Second, auditability: subagents routing work directly to each other would dissolve the trail and let one misjudgment cascade unsupervised, so the topology is hub and spoke, with every hop passing through the one context you can watch.
 
@@ -311,6 +311,77 @@ Reading the five together: diagram 1 is the one-writer rule; diagram 2 is what n
 can escape; diagram 3 is where human authority concentrates; diagram 4 is the order work
 flows; diagram 5 is how the deployed system pulls the loop closed by generating the next
 round of work. We need this mental model before Phase 0, because every "what happens" section later refers to it. 
+
+Here is the section, paste-ready. It belongs between [section 4](#4-the-authority-matrix) and Phase 0, because it teaches the skill that Phase 0 exercises. Add this TOC line after the authority matrix entry:
+
+```markdown
+- [5. Choosing and combining the words of the initial prompt](#5-choosing-and-combining-the-words-of-the-initial-prompt)
+```
+
+---
+
+### Choosing and combining the words of the initial prompt
+
+The Phase 0 prompt is the only prompt in this tutorial that works alone. Every later prompt is executed by an agent whose file already carries discipline, under hooks that already enforce a floor, inside a constitution that already assigns ownership. The seed prompt has none of that behind it: no agent files exist, no hooks fire, and nothing constrains the outcome except the words you type. That is why this section sits before Phase 0 rather than in an appendix. Word choice is the entire mechanism here, and the seed prompt is where a badly chosen word costs the most, because whatever it produces becomes the agent that produces everything else.
+
+The test that governs everything below: replace a word with its lay synonym and ask whether the agent's behavior would change. If not, the word was decoration. Every word this section discusses fails that test in the right direction, meaning the plain synonym produces a different, worse artifact. The full catalogue of this project's working vocabulary, with a rationale per entry, is in `docs/control-vocabulary.md`; this section teaches the rules that generated the catalogue, and then the rules for assembling chosen words into a prompt that survives contact with a model.
+
+#### Choosing the words
+
+Five selection rules produce almost every load-bearing phrase in this tutorial.
+
+Rule 1: prefer a term of art whenever its register carries entailments for free. The seed prompt says least privilege rather than "only give the tools that are needed". The lay phrasing invites the model to reason about need, and models are generous reasoners about need. The term of art means something narrower and stronger in everything the model has read: start from zero, grant capabilities explicitly, treat the default as deny. One word imports a thousand pages of precedent. The same rule placed constitutional, transcribe, and idempotent in these prompts, and later placed refuse a dirty tree and blast radius in the Phase 8 scripts.
+
+Rule 2: name the default, the hazard, or the direction, never the wish. The seed prompt does not say "always specify tools carefully". It says no omitted tools fields, because the dangerous case is not a wrong value but a missing line, since omission inherits every tool in the system, and the only way to ban a default is to name the omission itself as the violation. Likewise never widen a fence or soften a law names the one direction of change that requires the matrix to move first; narrowing needs no such clause. Wishes such as "be careful" have no failure condition, and a sentence with no failure condition cannot be enforced, reviewed, or even violated.
+
+Rule 3: keep load-bearing words rare. The seed prompt says ratification, never "approval". Approve is chat register; models emit it constantly and casually, so a gate built on the word would trigger on noise. Ratify almost never appears by accident, which makes it simultaneously a precise instruction, a greppable audit key, and a token a driver program can match in a report. The same logic chose vacuous in Phase 4 and the BLOCKED-ON marker in the report protocol. When you need a word to carry procedure, pick one the model would not otherwise use.
+
+Rule 4: prefer words with a mechanical test. Exactly one file, and nothing else can be checked with `ls -R .claude` after the run; "a minimal setup" cannot be checked with anything. At most 150 lines and at most 8 hard rules are budgets a reviewer verifies by counting; "keep it short" is a mood. Validate mechanically (json parse, bash -n, chmod +x) names three commands with exit codes, which is what distinguishes verification from a paragraph of confident prose. When you can choose between an adjective and a count, choose the count, because whatever can be counted can be gated.
+
+Rule 5: one word, one meaning, reused identically everywhere. The words you choose in the seed prompt become the words in the factory-engineer's file, which become the words in the files it writes, which become the words in every report you read for the life of the project. If ratify meant something slightly different in the prompt, the law, and the gate, the three would drift apart under paraphrase. This is the same discipline [the routing layer](#2-how-agent-instructions-become-actions) enforces on descriptions through the polysemy registry, applied to your own vocabulary: a word like migration is allowed one unqualified owner, and a word like constitutional is allowed one definition.
+
+#### Combining the words
+
+Choosing words is half the work. The seed prompt also demonstrates six composition rules, meaning rules about where words go relative to each other, and these matter because a model reads a prompt as a plan-forming stream: early tokens shape the plan, adjacent clauses travel together through paraphrase, and the final clause defines what done means.
+
+First, scope before content. The prompt opens with Create exactly one file, and nothing else, before saying anything about what the file contains. The bound comes first because the model commits to a shape early; a limit stated at the end arrives after the scaffolding reflex has already fired. Any prompt whose output set is closed should open by closing it.
+
+Second, an abstraction is pinned by an enumeration in the same sentence. The phrase the agent system itself would invite the model to decide what an agent system includes. The prompt does not leave it that freedom: the phrase is followed immediately by (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json). Abstraction gives the sentence its meaning; the parenthetical fixes its extension. One without the other is either unreadable or unbounded.
+
+Third, every grant travels with its guard, joined so tightly that no summary can keep one and drop the other. The quoted description ends prepares constitutional diffs; never self-ratifies, a power and its negation sharing one line, one semicolon apart. Law 2 does the same within a single sentence: full diff plus justification, in force only after human ratification and restart, never self-approved. Compare the failure mode of stating the power in sentence one and the limit in sentence nine: any paraphrase, summary, or partial reading can separate them. Adjacency is atomicity.
+
+Fourth, negations name their object or their alternative, never just a direction of virtue. Never self-ratifies names the exact composed act being banned. No omitted tools fields names the omission. Later in the tutorial, do NOT hand-roll Meta[Instant] names the precise tempting artifact, with the sanctioned alternative in the same sentence. A bare "do not do the wrong thing" gives the model nothing to match against; an effective negation is as concrete as the temptation it blocks.
+
+Fifth, attach the reason inside the clause when the reason is the test. In force only after human ratification and restart carries its own justification: restart is there because agent files load at session start, so the reader (human or model) can derive the rule again from first principles rather than memorizing it. The reference file in [Appendix A](#appendix-a-the-seed-agent-file) does this explicitly with (omission inherits everything). A rule with its reason attached survives rewording, because anyone paraphrasing it can regenerate the correct rule from the reason; a bare rule mutates silently.
+
+Sixth, end with a stop and an evidence channel. The prompt's last two sentences are present diff and stop and Print the full file content in your reply. The first defines done as shown rather than applied, which is the proposal-and-disposal split in miniature before any machinery exists to enforce it. The second routes the artifact into the channel you will actually review, since Mechanism 2 makes the reply the only thing that reliably reaches you. A prompt that does not say where its output terminates will terminate wherever the model's helpfulness runs out.
+
+Two smaller devices are worth noticing. Modal verbs form a ladder, and the seed prompt stays on its top rung: never, only, and may never be removed are binding; should and prefer are weighable, and the model will weigh them; the prompt uses the weighable forms nowhere. And every sentence names its actor. A human ratifies, the agent presents and stops, hooks exit 2. The passive voice ("changes are approved") deletes the one fact an authority system exists to pin down, namely who acts, so it never appears in a load-bearing clause.
+
+#### The seed prompt, clause by clause
+
+The table below dissects the actual Phase 0 prompt. Read it with the rules above in hand; every clause is doing at least one of them.
+
+| Clause | Rule at work | What the weak version would cause |
+|---|---|---|
+| Create exactly one file ... and nothing else | scope before content; mechanical test | "set up an agent" yields a README, a settings stub, and three helper files nobody ratified |
+| the agent system itself (CLAUDE.md, docs/agents.md, ...) | enumeration pins abstraction | the model decides what an agent system includes, and its guess becomes your architecture |
+| a routing-grade description ("... FROM SCRATCH ... never self-ratifies") | quote what must be verbatim | a description that is accurate prose but loses the routing tokens, so greenfield requests miss the agent |
+| tools Read, Grep, Glob, Write, Edit, Bash | explicit grant; rule 2's mirror | an omitted list inherits every tool, including cloud write tools, into the most powerful agent |
+| (1) transcribe the authority matrix | term of art for the relationship | "follow the matrix" permits interpretation, and interpretation is where policy leaks into files |
+| never widen a fence or soften a law unless the matrix changed first | direction named; grant with guard | "keep fences appropriate" lets the file and the matrix diverge one reasonable exception at a time |
+| (2) constitutional: ... in force only after human ratification and restart, never self-approved | rare word; reason attached; adjacency | "get changes approved" is satisfied by the agent noting its own approval in the report |
+| (3) least privilege ... no omitted tools fields ... reviewer-class agents get no write tools | term of art; default named; class named | a rule about "the reviewer" stops applying the day the factory creates a second reviewer |
+| (4) channel discipline ... at most 150 lines, at most 8 hard rules | budgets over adjectives | "keep CLAUDE.md concise" produces a 600-line constitution nobody reloads or reads |
+| (5) floor invariants that may never be removed (guard patterns, stop_hook_active, ...) | enumeration; top-rung modal | "preserve important safety features" leaves importance to the judgment of the thing being constrained |
+| validate mechanically (json parse, bash -n, chmod +x) | mechanical test | "validate your work" produces a paragraph of self-assessment and zero exit codes |
+| present diff and stop. Print the full file content in your reply | stop plus evidence channel | the agent helpfully commits, and the one gate that could have caught a bad seed never occurs |
+
+#### Testing the words before trusting them
+
+You cannot unit test a prompt, but you can test what it produced, and well-chosen words are precisely the ones that make the product checkable. After Phase 0, the checks are mechanical: `ls -R .claude` verifies the count clause; grepping the generated file for ratif, never, and tools: verifies that the load-bearing tokens survived into the artifact; a line-by-line diff against [Appendix A](#appendix-a-the-seed-agent-file) verifies substance. After Phase 1, the three probes in Step 1.4 test the same words at one more remove, since the boundary probe is really testing whether the ownership vocabulary you typed in Phase 0 propagated through the factory into a refusal.
+
+And when a run drifts, the first question is always whether the words permitted the drift. The clearest case in this project was a Flyway dependency scoped to Runtime when the data tier calls its API at boot: the prompt had said core plus postgres module, Runtime, and the agent applied the scope to both modules, exactly as the sentence allowed. The repair went into the wording, which now states the scope per module with the reason attached, and that is the standing loop this section leaves you with. Findings become specification, and specifications are made of words, so the vocabulary is not commentary on the engineering. It is the engineering.
 
 ### Mechanisms as built-in cause-and-effect pathways that operate the same way every time
 
