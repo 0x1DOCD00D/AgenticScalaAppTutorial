@@ -8,10 +8,10 @@ The example application is called [TaskForge](http://taskforge-dev-alb-145896282
 
 In this tutorial we explain how to create the following components.
 
-1. An agent system (the "factory"): ten Claude Code subagents, a project memory file, three safety hooks, a permission policy, and MCP server wiring. All of it lives in ordinary files in the repository.
+1. An agent system or *the factory*: ten Claude Code subagents, a project memory file, three safety hooks, a permission policy, and MCP server wiring. All of it lives in ordinary files in the repository.
 2. The application, produced by that agent system phase by phase: build definition, domain model, database schema and access layer, business rules, HTTP API and browser frontend, test suites, Terraform for AWS, deploy scripts, and GitHub Actions workflows.
 
-The _orchestrator_ is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
+The _orchestrator_ is the main Claude Code session where the conversation you are typing into after you run `claude`, before any delegation happens - we also show in [Appendix L](#appendix-l-automating-the-orchestrator-as-a-scala-3-driver-program) how to create a fully automated orchestrator. It is not one of the ten agents discussed below, it has no file in `.claude/agents/`, and no frontmatter defines it. It is what the model is when it wears no role file, and the word names the job that top-level session does in this workflow: receive your intent, plan, break the work into stages, hand each stage to the owning specialist, read the reports that come back, and decide what happens next. The cleanest way to see it is by contrast with a subagent, since the two differ on every mechanism.
 
 | | Orchestrator | Subagent |
 |---|---|---|
@@ -1760,3 +1760,129 @@ def halt(reason: String): Unit =
 Run it as `scala-cli scripts/orchestrator.scala --main-class featureLoop -- "add task priorities"`.
 
 What this preserves from the manual design, stated once because each is one line of the code above: fresh session per stage (each `invoke` is a new process, so reports travel by paste in `pastedReports`); oracles decide progression (`stage.gate`, not the report text); the repair loop passes through the driver, never agent to agent; every transcript is persisted; turn budgets bound thrash; and all four proposal kinds, plus any constitutional file touch, are terminal halts that leave the artifact staged for your ratify, apply, merge, or sign-off. What it deliberately does not do is also worth naming: it never calls `/deploy` on its own (leave W9 to a human or a separately gated trigger until this loop has bored you), and it never widens itself, because `scripts/orchestrator.scala` is infra-engineer territory, which means changes to the driver go through the same review as changes to `deploy.sh`. The orchestrator that automates the agents is, itself, just another artifact with an owner.
+
+---
+
+<a name="appendixM"></a>
+## Appendix M: the MCP servers and what they are for
+
+Four of the ten agents carry tools whose names begin with `mcp__`. Those tools do not come from Claude Code; they come from separate server programs declared in `.mcp.json`, which [Phase 1](#phase-1-the-factory-builds-the-factory) creates as part of the constitution. This appendix explains why the project needs them at all, what each server does, which agent holds which tool and for what purpose, and why every one of them is configured read-only.
+
+### Why MCP rather than just Bash
+
+Every agent in this project already has `Bash`, and the AWS CLI, `psql`, and `gh` are all reachable from a shell. A reasonable question is why any MCP server exists here. Four reasons, in order of how much they matter to this design.
+
+First, restriction. A shell command is opaque to the runtime: `aws ecs update-service ...` and `aws ecs describe-services ...` are both just strings, and distinguishing them means pattern-matching command text, which is a losing game against quoting, environment variables, and `--cli-input-json`. An MCP server can be started in a mode where the write operations do not exist in its tool list at all. The Postgres server runs with `--readonly true`, and the ECS server runs with `ALLOW_WRITE=false`. That is enforcement below the model, in a separate process, and it holds no matter what any instruction says.
+
+Second, structured results. `run_query` returns rows as data rather than as a terminal rendering that the model has to parse back into meaning. The same applies to ECS troubleshooting output, where the useful field is a stopped-task reason buried in a large JSON document.
+
+Third, discoverability. The server advertises its tools with schemas, so the agent knows the parameters without a model-recalled memory of CLI flags, which is the same class of stale knowledge that produced the deprecated Terraform lock-table parameter and the removed doobie import in [Phase 4](#phase-4-schema-and-data-tier).
+
+Fourth, credentials. The connection string and region live in the server's environment, not in a command line the model composes, so a database URL never has to appear in a prompt, a transcript, or a shell history.
+
+### How `mcp__<server>__<tool>` names come to exist
+
+The name is assembled at session start, not written by hand anywhere. Claude Code reads `.mcp.json`, starts each declared server, and asks it for its tool list. Each returned tool is registered under the prefix `mcp__`, then the key you gave the server in `.mcp.json`, then the tool's own name, joined by double underscores. The key `postgres` plus a server tool named `run_query` produces `mcp__postgres__run_query`, which is the string that must appear character for character in an agent's `tools:` line.
+
+Two consequences follow. Renaming a server key in `.mcp.json` silently invalidates every fence that referenced the old name, which is why `.mcp.json` and `.claude/agents/*` are one constitutional class with one owner. And a fence entry naming a tool the server does not actually export is not an error at load time; the tool simply is not there when the agent reaches for it. Verify the real names with the `/mcp` command in a session rather than assuming them.
+
+### The five servers
+
+| Server key | What it wraps | Restriction | Held by |
+|---|---|---|---|
+| `postgres` | awslabs Postgres MCP server | `--readonly true` | db-migrator, incident-responder |
+| `aws-api` | awslabs generic AWS API server | read-only by usage and by the permission deny list | infra-engineer, deploy-engineer, incident-responder |
+| `ecs` | awslabs ECS server | `ALLOW_WRITE=false` | deploy-engineer, incident-responder |
+| `terraform` | awslabs Terraform server | read-only by nature (registry and provider lookups) | main session only, see the audit note below |
+| `github` | GitHub MCP over HTTP | scoped by the token you authenticate with | main session only, see the audit note below |
+
+The configuration that produces them is shown below; this is the file the factory-engineer writes in Phase 1.
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.postgres-mcp-server@latest", "--readonly", "true"],
+      "env": {
+        "DATABASE_URL": "${DATABASE_URL}",
+        "AWS_REGION": "${AWS_REGION:-us-east-1}"
+      }
+    },
+    "aws-api": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.aws-api-mcp-server@latest"],
+      "env": {
+        "AWS_REGION": "${AWS_REGION:-us-east-1}",
+        "AWS_API_MCP_WORKING_DIR": "/tmp/aws-mcp"
+      }
+    },
+    "ecs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.ecs-mcp-server@latest"],
+      "env": {
+        "AWS_REGION": "${AWS_REGION:-us-east-1}",
+        "ALLOW_WRITE": "false"
+      }
+    },
+    "terraform": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["awslabs.terraform-mcp-server@latest"]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/"
+    }
+  }
+}
+```
+
+`uvx` runs each server on demand, which is why it appears in the [Session 0](#3-prerequisites-and-session-0) toolchain check. A missing `uvx` does not break the build; it breaks exactly the agents whose procedures depend on inspection, and it breaks them at the moment they inspect.
+
+### What each tool actually does in this project
+
+`mcp__postgres__run_query`, held by the db-migrator, exists for one procedure step: inspect the live schema before authoring a migration, never assume it. The migrator reads the current column set, constraints, and indexes, then writes `V<n>__*.sql` against what is really there rather than against what `V1` said months ago. This is also why [Phase 4](#phase-4-schema-and-data-tier) has to license the skipped step explicitly, since at that point in the genesis there is no database to inspect. The `--readonly true` flag is what makes it safe to hand a database tool to the one agent whose whole subject is destructive change: it can read the schema it is about to alter, and it cannot alter anything through this channel. The alteration happens later, through Flyway, from a migration file a human committed.
+
+The same tool, held by the incident-responder, serves diagnosis: connection counts, lock waits, a row count that confirms or refutes the report that data is disappearing. The responder's escalation rule says anything touching data goes to a human, and the read-only server is what turns that rule into a guarantee rather than a promise.
+
+`mcp__aws-api__call_aws` is the generic AWS surface, and each of its three holders uses it for a different purpose. The infra-engineer uses it while authoring Terraform, to check what actually exists in the account, since an authored resource that collides with reality produces a plan you cannot apply. The deploy-engineer uses it during a rollout to describe services, task definitions, and target-group health, which is the polling that lets it narrate rollout state instead of waiting blindly. The incident-responder uses it to read CloudWatch metrics and alarm state during triage.
+
+Note carefully what this tool is not used for. Registering a task-definition revision and updating a service during a deploy happen in `scripts/deploy.sh` through the AWS CLI, not through this tool, because those steps belong to a script that is version-controlled, reviewable, and owned by the infra-engineer. The MCP tool is for looking; the script is for doing. That split is the same one described in [section 4](#4-the-authority-matrix) as executes scripts it does not author.
+
+`mcp__ecs__ecs_resource_management`, held by the deploy-engineer, is a structured read over clusters, services, tasks, and revisions. Its most valuable use is the one that catches a silent failure: after `wait services-stable` returns, compare the revision the service is actually running against the revision the deploy just registered. The circuit breaker makes bare stability ambiguous, since ECS reports stable both when the new version is healthy and when it rolled back to the old one, and `ALLOW_WRITE=false` guarantees the comparison cannot turn into a fix attempt.
+
+`mcp__ecs__ecs_troubleshooting_tool`, held by the incident-responder, is the reason its triage order starts where it does. Stopped-task reasons name the killer directly (`OutOfMemoryError`, an image pull failure, a failed health check, a missing secret), and reading them first prevents 20 minutes of log spelunking for a fact that was one call away. The responder's autonomous remediations, meaning restart, roll back, and scale within [1,4], are performed through the deploy and rollback scripts and pre-approved CLI calls, not through this server, which stays read-only.
+
+The `terraform` server serves provider and registry lookups while infrastructure is being authored: current resource schemas, argument names, and module documentation. This is the direct countermeasure to stale training data, and it is the tool that would have prevented the `dynamodb_table` deprecation from reaching a plan.
+
+The `github` server covers issues, pull requests, and review comments. Note that the maintenance workflow in [Phase 10](#phase-10-pipelines) does not depend on it, because a workflow that opens a PR does so from the runner with its own token; this server serves interactive sessions where you want an agent to read a PR thread or an issue.
+
+### An audit note worth acting on
+
+Compare the fences in [Appendix C](#appendix-c-the-other-eight-agents-at-a-glance) against the server list above and one thing stands out: no agent's `tools:` line names a `terraform` or `github` tool. Those two servers are therefore reachable only from the main session. This is the MCP form of the orphan audit the factory-engineer runs in Phase 1, and it has exactly two acceptable dispositions.
+
+Either it is intended, meaning the orchestrator does registry research in plan mode and hands findings to the infra-engineer in the work order, which is defensible and keeps two more tools out of an agent fence. Or you want the infra-engineer to look things up itself during Phase 8, in which case the fence must be widened, and widening a fence follows the rule from the factory-engineer's law 1: change the matrix row first, in the same reviewed change set, then let the factory-engineer transcribe it, then ratify and restart. What you must not do is edit the `tools:` line by hand, because the matrix would then no longer describe the system, and every later review would diff against a lie.
+
+### Three layers, and what each one stops
+
+MCP restriction does not replace the other mechanisms; it composes with them, and knowing which layer stops what is how you debug a surprise.
+
+| Layer | Stops | Fails how |
+|---|---|---|
+| Server flags (`--readonly`, `ALLOW_WRITE=false`) | any write reaching AWS or the database through MCP, for every agent and the orchestrator alike | closed: the tool is absent from the server's list |
+| Tool fence (`tools:` in frontmatter) | an agent using a tool that exists but is not its business | closed: the runtime refuses the call |
+| Permissions and hooks in `settings.json` | `terraform apply`, `terraform destroy`, force-push, RDS and ECR deletes, `DROP TABLE` in a shell command | closed: deny beats allow; the guard hook exits 2 |
+
+Read the table bottom-up and the design intent is clear. The deny rules stop the catastrophic shell path, the fences stop the wrong-agent path, and the server flags stop the path where an agent has a legitimate tool and simply asks it to do too much. No agent in this project holds an MCP write tool of any kind. That is not caution for its own sake; it is the proposal-and-disposal rule expressed in configuration, because an MCP write tool would let an agent mutate cloud state outside Terraform, which is precisely the console-drift failure that [CLAUDE.md](#4-the-authority-matrix) forbids and that no later `terraform plan` could reconcile cleanly.
+
+### Verification and failure modes
+
+Run `/mcp` in a session to list connected servers and their real tool names. Do this once after Phase 1 ratification, and again any time a fence entry seems inert, since a tool that does not exist produces silence rather than an error.
+
+The failure modes are boring and worth recognizing on sight. A server that will not start usually means `uvx` is missing or the package name is wrong, and the symptom is an agent that reasons about inspecting and then does not. An unset `DATABASE_URL` produces a Postgres server that starts and then fails on first query, which is why the migrator's report must say what it inspected rather than asserting that it inspected. Expired AWS credentials surface identically through the MCP path and the CLI path, so check `aws sts get-caller-identity` before blaming the server. In every one of these cases the correct fallback is the same: the agent reports what it could not verify and stops, rather than proceeding on an assumption, which its report contract already requires.
+
+Any change to `.mcp.json`, whether adding a server, renaming a key, or altering a restriction flag, is a constitutional change. It goes through the factory-engineer, arrives as a diff with the matrix row that justifies it, and takes effect only after you ratify and restart.
