@@ -179,7 +179,7 @@ Two invariants should hold across the whole table whenever you amend it, and the
 
 The AI agentic system is shown in five small diagrams: ownership, the floor and its standing gates, proposal and disposal, the operational workflow, and the runtime paths with their feedback loops. Node border colors identify the kind of node (violet: human side; blue: agent; orange: constitution and floor; amber: repository artifact; green: AWS runtime); fills stay neutral. Solid arrows mean creates, owns, or executes; dashed arrows mean gates, reads, or bounded writes. A rendered version of all five is agent-graph.html.
 
-#### Diagram 1: Ownership with one writer per artifact class
+### Diagram 1: Ownership with one writer per artifact class
 
 Each agent's solid arrow points at the one artifact class it creates and owns. The two
 dashed arrows are the only bounded exceptions: version bumps into the build ledger, and
@@ -236,9 +236,9 @@ flowchart LR
 The code-reviewer is absent here on purpose: it owns nothing, which is its design (no
 write tools). It appears in the next diagram, where its work lives.
 
-#### Diagram 2: The floor and the standing gates
+### Diagram 2: The floor and the standing gates
 
-What constrains every change, all the time, regardless of who makes it. The constitution
+This diagram shows what constrains every change, all the time, regardless of who makes it. The constitution
 and floor load into every agent context; the two hooks act on every tool call and every
 attempt to finish; the code-reviewer reads every diff; the routing test corpus gates every
 description change.
@@ -268,7 +268,7 @@ flowchart LR
   class CTX,DIFF artifact
 ```
 
-#### Diagram 3: Proposal and disposal - what agents produce, what only you enact
+### Diagram 3: Proposal and disposal - what agents produce, what only you enact
 
 Every irreversible or authority-changing act is split in two: an agent produces an inert
 proposal, and a specific human action turns it into reality. If you do nothing, nothing
@@ -296,9 +296,9 @@ flowchart LR
   style PR fill:#fcfcfb,stroke:#d8d7d0
 ```
 
-#### Diagram 4: The operational workflow
+### Diagram 4: The operational workflow
 
-The numbered delegation order. W1 to W9 is the build and release path; every agent's
+The diagram shows the numbered delegation order. W1 to W9 is the build and release path; every agent's
 report returns to the orchestrator (drawn once as the reports edge). The two standing
 loops, W10 and W11, are in the next diagram where their triggers live.
 
@@ -331,9 +331,9 @@ flowchart LR
   class FE,BE,DM,FI,TE,CR,IE,DE agent
 ```
 
-#### Diagram 5: Runtime paths and the two feedback loops
+### Diagram 5: Runtime paths and the two feedback loops
 
-How repository artifacts become a running system, and how the running system feeds work
+This diagram shows how repository artifacts become a running system, and how the running system feeds work
 back: alarms drive the incident path (W10), and the weekly cron drives maintenance (W11).
 
 ```mermaid
@@ -369,46 +369,42 @@ flowchart LR
   class IMG,ECS,RDS,CW runtime
 ```
 
-Reading the five together: diagram 1 is the one-writer rule; diagram 2 is what no change
+To recapitulate briefly, diagram 1 is the one-writer rule; diagram 2 is what no change
 can escape; diagram 3 is where human authority concentrates; diagram 4 is the order work
 flows; diagram 5 is how the deployed system pulls the loop closed by generating the next
 round of work. We need this mental model before Phase 0, because every "what happens" section later refers to it. 
-
-Here is the section, paste-ready. It belongs between [section 4](#4-the-authority-matrix) and Phase 0, because it teaches the skill that Phase 0 exercises. Add this TOC line after the authority matrix entry:
-
-```markdown
-- [5. Choosing and combining the words of the initial prompt](#5-choosing-and-combining-the-words-of-the-initial-prompt)
-```
 
 ---
 
 ### Choosing and combining the words of the initial prompt
 
-The Phase 0 prompt is the only prompt in this tutorial that works alone. Every later prompt is executed by an agent whose file already carries discipline, under hooks that already enforce a floor, inside a constitution that already assigns ownership. The seed prompt has none of that behind it: no agent files exist, no hooks fire, and nothing constrains the outcome except the words you type. That is why this section sits before Phase 0 rather than in an appendix. Word choice is the entire mechanism here, and the seed prompt is where a badly chosen word costs the most, because whatever it produces becomes the agent that produces everything else.
+The Phase 0 prompt is the only prompt in this tutorial that works alone and should be written from scratch by the human architect. Every later prompt is executed by an agent whose file already carries discipline, under hooks that already enforce a floor, inside a constitution that already assigns ownership. The seed prompt has none of that behind it: no agent files exist, no hooks fire, and nothing constrains the outcome except the words you type. That is why this section sits before Phase 0 rather than in an appendix. Word choice is the entire mechanism here, and the seed prompt is where a badly chosen word costs the most, because whatever it produces becomes the agent that produces everything else.
 
-The test that governs everything below: replace a word with its lay synonym and ask whether the agent's behavior would change. If not, the word was decoration. Every word this section discusses fails that test in the right direction, meaning the plain synonym produces a different, worse artifact. The full catalogue of this project's working vocabulary, with a rationale per entry, is in `docs/control-vocabulary.md`; this section teaches the rules that generated the catalogue, and then the rules for assembling chosen words into a prompt that survives contact with a model.
+The lithmus test whether a word is needed is the following. Replace a word with its lay synonym and ask whether the agent's behavior would change. If not, the word was decoration and can be removed. Every word this section discusses fails that test in the right direction, meaning the plain synonym produces a different, worse artifact. The full catalogue of this project's working vocabulary, with a rationale per entry, is in `docs/control-vocabulary.md`; this section teaches the rules that generated the catalogue, and then the rules for assembling chosen words into a prompt that survives contact with a model.
 
 #### Choosing the words
 
 Five selection rules produce almost every load-bearing phrase in this tutorial.
 
-Rule 1: prefer a term of art whenever its register carries entailments for free. The seed prompt says least privilege rather than "only give the tools that are needed". The lay phrasing invites the model to reason about need, and models are generous reasoners about need. The term of art means something narrower and stronger in everything the model has read: start from zero, grant capabilities explicitly, treat the default as deny. One word imports a thousand pages of precedent. The same rule placed constitutional, transcribe, and idempotent in these prompts, and later placed refuse a dirty tree and blast radius in the Phase 8 scripts.
+**Rule 1**: prefer a term of art whenever its register carries entailments for free. The seed prompt says least privilege rather than "only give the tools that are needed". The _lay phrasing invites the model to reason about need_, and models are generous reasoners about need. The term of art means something narrower and stronger in everything the model has read: start from zero, grant capabilities explicitly, treat the default as deny. One word imports a thousand pages of precedent. The same rule placed constitutional, transcribe, and idempotent in these prompts, and later placed refuse a dirty tree and blast radius in the Phase 8 scripts.
 
-Rule 2: name the default, the hazard, or the direction, never the wish. The seed prompt does not say "always specify tools carefully". It says no omitted tools fields, because the dangerous case is not a wrong value but a missing line, since omission inherits every tool in the system, and the only way to ban a default is to name the omission itself as the violation. Likewise never widen a fence or soften a law names the one direction of change that requires the matrix to move first; narrowing needs no such clause. Wishes such as "be careful" have no failure condition, and a sentence with no failure condition cannot be enforced, reviewed, or even violated.
+![img_3.png](img_3.png)
 
-Rule 3: keep load-bearing words rare. The seed prompt says ratification, never "approval". Approve is chat register; models emit it constantly and casually, so a gate built on the word would trigger on noise. Ratify almost never appears by accident, which makes it simultaneously a precise instruction, a greppable audit key, and a token a driver program can match in a report. The same logic chose vacuous in Phase 4 and the BLOCKED-ON marker in the report protocol. When you need a word to carry procedure, pick one the model would not otherwise use.
+**Rule 2**: name the default, the hazard, or the direction, never the wish. The seed prompt does not say "always specify tools carefully". It says no omitted tools fields, because the dangerous case is not a wrong value but a missing line, since omission inherits every tool in the system, and the only way to ban a default is to name the omission itself as the violation. Likewise never widen a fence or soften a law names the one direction of change that requires the matrix to move first; narrowing needs no such clause. Wishes such as "be careful" have no failure condition, and a sentence with no failure condition cannot be enforced, reviewed, or even violated.
 
-Rule 4: prefer words with a mechanical test. Exactly one file, and nothing else can be checked with `ls -R .claude` after the run; "a minimal setup" cannot be checked with anything. At most 150 lines and at most 8 hard rules are budgets a reviewer verifies by counting; "keep it short" is a mood. Validate mechanically (json parse, bash -n, chmod +x) names three commands with exit codes, which is what distinguishes verification from a paragraph of confident prose. When you can choose between an adjective and a count, choose the count, because whatever can be counted can be gated.
+**Rule 3**: keep load-bearing words rare. The seed prompt says ratification, never "approval". _Approve_ is chat register; models emit it constantly and casually, so a gate built on the word would trigger on noise. _Ratify_ almost never appears by accident, which makes it simultaneously a precise instruction, a greppable audit key, and a token a driver program can match in a report. The same logic chose vacuous in Phase 4 and the BLOCKED-ON marker in the report protocol. When you need a word to carry procedure, pick one the model would not otherwise use.
 
-Rule 5: one word, one meaning, reused identically everywhere. The words you choose in the seed prompt become the words in the factory-engineer's file, which become the words in the files it writes, which become the words in every report you read for the life of the project. If ratify meant something slightly different in the prompt, the law, and the gate, the three would drift apart under paraphrase. This is the same discipline [the routing layer](#2-how-agent-instructions-become-actions) enforces on descriptions through the polysemy registry, applied to your own vocabulary: a word like migration is allowed one unqualified owner, and a word like constitutional is allowed one definition.
+**Rule 4**: prefer words with a mechanical test. Exactly one file, and nothing else can be checked with `ls -R .claude` after the run; "a minimal setup" cannot be checked with anything. At most 150 lines and at most eight hard rules are budgets a reviewer verifies by counting; "keep it short" is a mood. Validate mechanically, e.g., json parse, bash -n, chmod +x, names three commands with exit codes, which is what distinguishes verification from a paragraph of confident prose. When you can choose between an adjective and a count, choose the count, because whatever can be counted can be gated.
+
+**Rule 5**: one word, one meaning, reused identically everywhere. The words you choose in the seed prompt become the words in the factory-engineer's file, which become the words in the files it writes, which become the words in every report you read for the life of the project. If ratify meant something slightly different in the prompt, the law, and the gate, the three would drift apart under paraphrase. This is the same discipline [the routing layer](#2-how-agent-instructions-become-actions) enforces on descriptions through the polysemy registry, applied to your own vocabulary: a word like migration is allowed one unqualified owner, and a word like constitutional is allowed one definition.
 
 #### Combining the words
 
 Choosing words is half the work. The seed prompt also demonstrates six composition rules, meaning rules about where words go relative to each other, and these matter because a model reads a prompt as a plan-forming stream: early tokens shape the plan, adjacent clauses travel together through paraphrase, and the final clause defines what done means.
 
-First, scope before content. The prompt opens with Create exactly one file, and nothing else, before saying anything about what the file contains. The bound comes first because the model commits to a shape early; a limit stated at the end arrives after the scaffolding reflex has already fired. Any prompt whose output set is closed should open by closing it.
+First, scope should come before content. The prompt opens with Create exactly one file, and nothing else, before saying anything about what the file contains. The bound comes first because the model commits to a shape early; a limit stated at the end arrives after the scaffolding reflex has already fired. Any prompt whose output set is closed should open by closing it.
 
-Second, an abstraction is pinned by an enumeration in the same sentence. The phrase the agent system itself would invite the model to decide what an agent system includes. The prompt does not leave it that freedom: the phrase is followed immediately by (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json). Abstraction gives the sentence its meaning; the parenthetical fixes its extension. One without the other is either unreadable or unbounded.
+Second, an abstraction is pinned by an enumeration in the same sentence. The phrase the agent system itself would invite the model to decide what an agent system includes. The prompt does not leave it that freedom: the phrase is followed immediately by specific components, for example, CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json. Abstraction gives the sentence its meaning; the parenthetical fixes its extension. One without the other is either unreadable or unbounded.
 
 Third, every grant travels with its guard, joined so tightly that no summary can keep one and drop the other. The quoted description ends prepares constitutional diffs; never self-ratifies, a power and its negation sharing one line, one semicolon apart. Law 2 does the same within a single sentence: full diff plus justification, in force only after human ratification and restart, never self-approved. Compare the failure mode of stating the power in sentence one and the limit in sentence nine: any paraphrase, summary, or partial reading can separate them. Adjacency is atomicity.
 
@@ -443,7 +439,7 @@ The table below dissects the actual Phase 0 prompt. Read it with the rules above
 
 You cannot unit test a prompt, but you can test what it produced, and well-chosen words are precisely the ones that make the product checkable. After Phase 0, the checks are mechanical: `ls -R .claude` verifies the count clause; grepping the generated file for ratif, never, and tools: verifies that the load-bearing tokens survived into the artifact; a line-by-line diff against [Appendix A](#appendix-a-the-seed-agent-file) verifies substance. After Phase 1, the three probes in Step 1.4 test the same words at one more remove, since the boundary probe is really testing whether the ownership vocabulary you typed in Phase 0 propagated through the factory into a refusal.
 
-And when a run drifts, the first question is always whether the words permitted the drift. The clearest case in this project was a Flyway dependency scoped to Runtime when the data tier calls its API at boot: the prompt had said core plus postgres module, Runtime, and the agent applied the scope to both modules, exactly as the sentence allowed. The repair went into the wording, which now states the scope per module with the reason attached, and that is the standing loop this section leaves you with. Findings become specification, and specifications are made of words, so the vocabulary is not commentary on the engineering. It is the engineering.
+And when a run drifts, the first question is always whether the words permitted the drift. The clearest case in this project was a Flyway dependency scoped to Runtime when the data tier calls its API at boot: the prompt had said core plus postgres module, Runtime, and the agent applied the scope to both modules, exactly as the sentence allowed. The repair went into the wording, which now states the scope per module with the reason attached, and that is the standing loop this section leaves you with. Findings become specification, and specifications are made of words, so the vocabulary is not commentary on the engineering - it is the engineering!
 
 ### Mechanisms as built-in cause-and-effect pathways that operate the same way every time
 
