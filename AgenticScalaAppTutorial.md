@@ -633,15 +633,15 @@ The mental model to carry forward, extending the warehouse picture from the tool
 
 ## Routing tests and the description expansion loop
 
-The tutorial has treated descriptions as routing patterns and given rules for writing them. This section makes routing an engineered property like everything else in the project: measurable, regression-tested, and improved by a mechanical loop instead of by guessing.
+The tutorial has treated descriptions as routing patterns and given rules for writing them. This section makes routing an engineered property like everything else in the project: measurable, regression-tested, and improved by a mechanical loop.
 
 ### Why routing needs tests
 
-The router is a model reading all ten descriptions and picking a delegate, so a description's real meaning is behavioral: a word routes if, when it appears in a request, the intended agent reliably wins. You cannot verify that by rereading the description; it seems clear to its author by construction. You can only verify it by firing requests at the router and checking who answers. Two facts make this cheap in this project. First, the ownership map gives correct labels for free: every request about an artifact class has exactly one right destination. Second, the same headless mode used by the maintenance workflow can query the router in bulk.
+The router is a model reading all ten descriptions and picking a delegate, so a description's real meaning is behavioral: a word routes if, when it appears in a request, the intended agent reliably wins. _You cannot verify that by rereading the description; it seems clear to its author by construction_. You can only verify it by firing requests at the router and checking who answers. Two facts make this cheap in this project. First, the ownership map gives correct labels for free as every request about an artifact class has exactly one right destination. Second, the same headless mode used by the maintenance workflow can query the router in bulk.
 
 ### The routing corpus
 
-Create `docs/routing-tests.md`, a labeled corpus of requests. One table, three columns: the request as a user would actually type it, the agent that must win, and a note on why (which makes repairs reviewable later). Seed it with, for each agent: five realistic requests it must receive, and three near misses it must not receive (its neighbors' work, phrased temptingly). Include every real request from your own sessions that ever routed wrong, as soon as it happens.
+Create `docs/routing-tests.md`, a labeled corpus of requests. One table, three columns: the request as a user would actually type it, the agent that must win, and a note on why (which makes repairs reviewable later). Seed it with, for each agent,  five realistic requests it must receive, and three near misses it must not receive, e.g., its neighbors' work. Include every real request from your own sessions that ever routed wrong, as soon as it happens.
 
 ```markdown
 | Request | Expected agent | Why |
@@ -671,13 +671,13 @@ A clean run prints nothing. Run it whenever any description changes, and after a
 
 ### The expansion loop
 
-When the suite reports misroutes, repair by expansion, one discriminating phrase at a time. The loop consists of the following steps.
+When the suite reports misroutes, repair by expansion, one discriminating phrase at a time. The expansion loop consists of the following steps.
 
-1. Generate. For each agent, have a plain session generate a fresh batch of paraphrased requests it should and should not receive. Add them to the corpus with labels from the ownership map.
-2. Route. Run the suite; collect misroutes.
-3. Repair, discriminatively. For each misroute, find the smallest phrase that flips the decision and add it to the correct agent's description. Prefer artifact names and paths (build.sbt, V*.sql, infra/terraform); their collision risk is near zero. If the wrong winner was a neighbor, add the matching exclusion to the neighbor's description in the same change ("except pure version bumps, which belong to dependency-updater"). Boundaries are always repaired from both sides at once.
-4. Check for regressions. A term added for one request must not flip any other row. The suite is the check.
-5. Iterate. Stop when a full fresh batch of generated paraphrases produces no new misroutes. That is the fixpoint: not a mathematical guarantee, but an empirical one, and it is re-checked every time the corpus grows.
+1. **Generate**. For each agent, have a plain session generate a fresh batch of paraphrased requests it should and should not receive. Add them to the corpus with labels from the ownership map.
+2. **Route**. Run the suite; collect misroutes.
+3. **Repair, discriminatively**. For each misroute, find the smallest phrase that flips the decision and add it to the correct agent's description. Prefer artifact names and paths (build.sbt, V*.sql, infra/terraform); their collision risk is near zero. If the wrong winner was a neighbor, add the matching exclusion to the neighbor's description in the same change ("except pure version bumps, which belong to dependency-updater"). Boundaries are always repaired from both sides at once.
+4. **Check for regressions**. A term added for one request must not flip any other row. The suite is the check.
+5. **Iterate**. Stop when a full fresh batch of generated paraphrases produces no new misroutes. That is the fixpoint: not a mathematical guarantee, but an empirical one, and it is re-checked every time the corpus grows.
 
 Three regularizers keep the loop convergent instead of oscillating. Keep each description under its length budget, so repair must choose the best phrase rather than accumulate all phrases. Never add a term that names another agent's artifacts. And never repair by editing prompts instead of descriptions; a prompt workaround fixes one session, a description fix routes correctly for every future session, teammate, and scheduled run.
 
@@ -706,7 +706,7 @@ Compressed to one sentence, the loop's instruments are scripts, its labor is an 
 
 ### Wiring it into the factory
 
-Description changes are constitutional, so the loop belongs to the factory-engineer. Add one law and one verification step to its file (through the factory-engineer itself, ratified as usual).
+Description changes are constitutional, so the loop belongs to the factory-engineer. Add one law and one verification step to its file through the factory-engineer itself, ratified as usual.
 
 ```markdown
 6. Descriptions are tested artifacts: any change to a description must keep
@@ -728,17 +728,13 @@ The first snippet (starting "6. Descriptions are tested artifacts...") appends t
 
 The second snippet (starting "6. Verify routing: run the routing suite...") appends to the `## Procedure` section, which currently ends at step 5 (the report). After the edit, the procedure has a sixth step: its verification tail now includes running the routing suite and reporting pass counts and repairs. This gives the factory-engineer what it previously lacked and every other agent already had: a mechanical check at the end of its own procedure that its work (in this case, descriptions) actually behaves.
 
-And note the deliberately recursive part of the instruction: because that file lives under `.claude/`, editing it is itself a constitutional change, which by the ownership map belongs to the factory-engineer. So the way you make this edit is to delegate it to the factory-engineer ("add law 6 and procedure step 6 by pasting the two snippets"); it edits its own definition, presents the diff, and stops; you ratify with commit plus session restart, after which the new law governs its next invocation. The agent amending its own constitution under human ratification is the normal evolution path for every file in `.claude/agents/`, including this one.
+And note the deliberately recursive part of the instruction: because that file lives under `.claude/`, editing it is itself a constitutional change, which by the ownership map belongs to the factory-engineer. So the way you make this edit is to delegate it to the factory-engineer as in "add law 6 and procedure step 6 by pasting the two snippets"; it edits its own definition, presents the diff, and stops; you ratify with commit plus session restart, after which the new law governs its next invocation. The agent amending its own constitution under human ratification is the normal evolution path for every file in `.claude/agents/`, including this one.
 
 ---
 
-That's the full section; it slots naturally either after Phase 1 (whose probes it generalizes) or as a numbered section before the appendices, with a TOC entry like `- [Routing tests and the description expansion loop](#routing-tests-and-the-description-expansion-loop)`.
+## 3. Prerequisites and Session Zero
 
-## 3. Prerequisites and Session 0
-
-Session 0 is the only part of this tutorial where you do setup work yourself. Everything is a shell command; run them in order.
-
-Check the toolchain (install anything missing; use an AWS sandbox account, never production):
+Session Zero is the only part of this tutorial where you do setup work yourself. Everything is a shell command; run them in order. Check the toolchain to install anything missing; use an AWS sandbox account, never production.
 
 ```bash
 java -version          # Java 21 (Temurin recommended; matches the Docker base image)
@@ -750,14 +746,14 @@ node --version         # 18+; runs Claude Code
 aws sts get-caller-identity   # MUST print the sandbox account id
 ```
 
-Install and verify Claude Code:
+Install and verify Claude Code.
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 claude --version
 ```
 
-Create the Terraform state store. This is the one chicken-and-egg AWS step: Terraform cannot create the bucket its own state lives in. Choose a globally unique bucket name and remember it for [Phase 8](#phase-8-infrastructure-and-scripts):
+Create the Terraform state store. This is the one chicken-and-egg AWS step: Terraform cannot create the bucket its own state lives in. Choose a globally unique bucket name and remember it for [Phase 8](#phase-8-infrastructure-and-scripts).
 
 ```bash
 aws s3api create-bucket --bucket <unique>-tfstate --region us-east-1
@@ -767,13 +763,13 @@ aws dynamodb create-table --table-name taskforge-tflock \
   --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST
 ```
 
-Create the empty repository:
+Create the empty repository.
 
 ```bash
 mkdir taskforge && cd taskforge && git init
 ```
 
-Two standing conventions for every phase that follows:
+Two standing conventions for every phase are the following.
 
 1. One phase, one session, one commit. Start each phase with a fresh `claude` session (or `/clear`). Commit at the end of each phase with the message given in that phase. The git log becomes the build diary.
 2. Reports travel by paste. When a phase says "paste the previous report", copy the agent's final report text into the new prompt. Mechanism 2 above is the reason: the next agent cannot see it otherwise.
@@ -797,19 +793,19 @@ Recall the authority matrix that we duplicate here for convenience - this table/
 
 ### Phase 0: the seed agent
 
-Goal: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
+_Goal_: exactly one file exists at the end of this phase, `.claude/agents/factory-engineer.md`. It is the only agent file a plain session ever writes; every other agent will be written by this one. This resolves the bootstrap question (who builds the agents?) with a two-step seed: a plain session writes the seed, you ratify it, and from then on the factory builds the factory.
 
-Step 0.1. Confirm the starting state. You are in the repository created at the end of Session 0. Check where you are and what exists:
+Step 0.1. Confirm the starting state. You are in the repository created at the end of Session 0. Check where you are and what exists.
 
 ```bash
 pwd
 ls -la
 ```
 
-Expected output: the path ends in `/taskforge`, and the directory contains nothing but git's own bookkeeping:
+Expected output: the path ends in `/taskforge`, and the directory contains nothing but git's own bookkeeping.
 
 ```text
-/home/you/taskforge
+/home/yourpath/taskforge
 total 12
 drwxr-xr-x  3 you you 4096 .
 drwxr-xr-x 21 you you 4096 ..
@@ -818,51 +814,51 @@ drwxr-xr-x  7 you you 4096 .git
 
 No CLAUDE.md, no .claude directory, no source. This emptiness matters for what happens next: when Claude Code starts here, there is no project memory to load, no agents to route to, no hooks, and no permission lists. The session you are about to run is the only one in this entire tutorial that operates with none of the factory around it.
 
-Step 0.2. Start Claude Code in this directory:
+Step 0.2. Start Claude Code in this directory.
 
 ```bash
 claude
 ```
 
-What you will see: the interactive prompt opens, showing the working directory. If this is the first time Claude Code runs in this folder, it asks whether you trust the files in it; confirm. If you want to verify the empty starting state from inside, ask "what agents are available?" and expect only the built-in general-purpose behavior, with no project agents listed, because `.claude/agents/` does not exist yet.
+You will see the interactive prompt opens, showing the working directory. If this is the first time Claude Code runs in this folder, it asks whether you trust the files in it; confirm. If you want to verify the empty starting state from inside, ask "what agents are available?" and expect only the built-in general-purpose behavior, with no project agents listed, because `.claude/agents/` does not exist yet.
 
-Step 0.3. Give the seed prompt, verbatim:
+Step 0.3. Give the seed prompt, verbatim.
 
 > Create exactly one file, `.claude/agents/factory-engineer.md`, and nothing else: an agent whose job is to create and maintain the agent system itself (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json) from an authority matrix. Frontmatter: name factory-engineer; a routing-grade description ("Creates and maintains the agent system itself FROM SCRATCH... prepares constitutional diffs; never self-ratifies"); tools Read, Grep, Glob, Write, Edit, Bash. Body iron laws: (1) transcribe the authority matrix, never widen a fence or soften a law unless the matrix changed first; (2) every .claude/** change is constitutional: full diff plus justification, in force only after human ratification and restart, never self-approved; (3) least privilege by default: no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools; (4) channel discipline: timeless role files, universal facts to CLAUDE.md (at most 150 lines, at most 8 hard rules), one-run detail in task text; (5) floor invariants that may never be removed (guard patterns, stop_hook_active check, formatter exit 0, deny rules for terraform apply/destroy, force-push, .env reads). Procedure: read matrix, author files using the five-section skeleton with collision and orphan audits, validate mechanically (json parse, bash -n, chmod +x), present diff and stop. Print the full file content in your reply.
 
-Does Claude know where to find the authority matrix when it reads the seed prompt? No, and the design does not require it to, because at that moment there is nothing to find and nothing that tries to find it. The distinction that resolves this: the phrase "authority matrix" in the seed prompt is content to transcribe, not a reference to resolve. The seed session's entire task is to write specified words into a file. When it writes law 1, "transcribe the authority matrix (docs/agents.md)", it is copying a sentence, the way a scribe can copy "see appendix C" into a manuscript whose appendix C has not been written yet. No lookup is attempted because the instruction never asks the session to consult the matrix, only to create an agent whose future behavior will consult it. What the model does have is the linguistic understanding of what an authority matrix is (a table of powers, prohibitions, and escalations), which is enough to write a coherent description and laws around the term.
+Claude does not know where to find the authority matrix when it reads the seed prompt. The design does not require it to, because at that moment there is nothing to find and nothing that tries to find it. The distinction that resolves this is that the phrase "authority matrix" in the seed prompt is content to transcribe, _not a reference to resolve_. The seed session's entire task is to write specified words into a file. When it writes law 1, "transcribe the authority matrix (docs/agents.md)", it is copying a sentence, the way a scribe can copy "see appendix C" into a manuscript whose appendix C has not been written yet. No lookup is attempted because the instruction never asks the session to consult the matrix, only to create an agent whose future behavior will consult it. What the model does have is the linguistic understanding of what an authority matrix is (a table of powers, prohibitions, and escalations), which is enough to write a coherent description and laws around the term.
 
-The question of "knowing where to find it" then has a precise answer with three moments. At seed time (Phase 0): nothing resolves the reference, and the prompt's "create exactly one file and nothing else" forecloses the failure mode where a helpful session invents a matrix to fill the gap. At first invocation (Phase 1): the matrix does not need finding because it is delivered, serialized inside the invocation prompt itself; the agent works from what it was handed. At every invocation after that: the reference resolves by ordinary file reading, because the agent's own Phase 1 output created docs/agents.md, the seed file's law 1 names that exact path, and the agent's procedure step 1 says to read it, so a fresh context knows where to look for the same reason you know where to look when a document tells you the address. And if someone ever invokes the agent in a state where the path does not exist and no matrix came in the prompt, the correct behavior is designed in rather than hoped for: a transcriber with no source stops and reports the missing input instead of legislating one, which is the BLOCKED-ON pattern applied to the factory itself.
+The question of "knowing where to find the authority matrix" then has a precise answer with three moments. At seed time (Phase 0): nothing resolves the reference, and the prompt's "create exactly one file and nothing else" forecloses the failure mode where a helpful session invents a matrix to fill the gap. At first invocation (Phase 1): the matrix does not need finding because it is delivered, serialized inside the invocation prompt itself; the agent works from what it was handed. At every invocation after that: the reference resolves by ordinary file reading, because the agent's own Phase 1 output created docs/agents.md, the seed file's law 1 names that exact path, and the agent's procedure step 1 says to read it, so a fresh context knows where to look for the same reason you know where to look when a document tells you the address. And if someone ever invokes the agent in a state where the path does not exist and no matrix came in the prompt, the correct behavior is that a transcriber with no source stops and reports the missing input instead of legislating one, which is the BLOCKED-ON pattern applied to the factory itself.
 
-One general point about every prompt you will ever write for this system is that an LLM never "knows where to find" anything in the sense of having an index. A reference in text resolves only through one of three concrete routes: the text itself names a path an agent can Read, the content arrives in the prompt, or the agent searches the world with its tools. When you write prompts and agent files, every dangling term you use should have one of those three routes attached, and the seed prompt's handling of "authority matrix" is the worked example: route two at first use, route one forever after.
+One general point is that an LLM never "knows where to find" anything in the sense of having an index. A reference in text resolves only through one of three concrete routes: the text itself names a path an agent can Read, the content arrives in the prompt, or the agent searches the world with its tools. When you write prompts and agent files, every dangling term you use should have one of those three routes attached, and the seed prompt's handling of "authority matrix" is the worked example: route two at first use, route one forever after.
 
 Here are the seven terms, each explained briefly as used in the seed prompt.
 
-**Frontmatter.** The machine-readable metadata block at the very top of a markdown file, fenced between two lines containing only `---`. The term comes from static-site publishing tools, where a page's title and tags ride above its content the same way. In an agent file the frontmatter carries three keys the runtime parses: `name` (the routing handle), `description` (the routing pattern), and `tools` (the fence). Everything below the second `---` is the body, which is not parsed at all; it is handed to the model verbatim as its system prompt. The distinction matters: frontmatter configures the runtime, body instructs the model.
+**Frontmatter.** The machine-readable metadata block at the very top of a markdown file, fenced between two lines containing only `---`. The term comes from static-site publishing tools, where a page's title and tags ride above its content the same way. In an agent file the frontmatter carries three keys the runtime parses: `name` (the routing handle), `description` (the routing pattern), and `tools` (the fence). Everything below the second `---` is the body, which is not parsed at all; it is handed to the model verbatim as its system prompt. The distinction matters since the frontmatter configures the runtime, body instructs the model.
 
 **Constitutional, in "constitutional diffs".** An analogy to a state's constitution: the rules that stand above ordinary rules because they define who holds power and how all other rules get made. In this system the constitution-level artifacts are CLAUDE.md, everything under .claude/ (agent files, hooks, settings.json, commands), .mcp.json, and docs/agents.md, because every other artifact in the repository is produced under their authority. A constitutional diff is a proposed change to any of those files. The elevated ceremony follows from the elevated blast radius: a bug in TaskService.scala breaks a feature; a bug in code-reviewer.md breaks the thing that catches broken features. So constitutional diffs get the strictest process in the system: full diff presented with justification, human ratification, session restart.
 
 **A fence.** The `tools:` list in an agent's frontmatter, which is the boundary of what that agent is physically able to do. The runtime offers the model only the tools on the list; an absent tool cannot be called, not because the agent is told not to but because the capability does not exist in its context. The metaphor is literal: a fence encloses the territory the agent can reach. The code-reviewer's fence (`Read, Grep, Glob, Bash`, no Edit, no Write) is the strongest example: reviewing without the ability to modify is enforced by absence, not by promise.
 
-**"Change is constitutional."** This phrase in law 2 needs disambiguating, because English gives "constitutional" two readings. It does not mean "the change complies with the constitution" (as in "that law is constitutional"). It means "the change belongs to the constitutional class", that is, it touches constitution-level files and therefore must follow the constitutional procedure: present the full diff plus the matrix row justifying it, stop, take effect only after human ratification and a restart, and never approve your own work. Read it as "every .claude change has constitutional status", a classification that triggers a process, not a verdict of compliance.
+**"Change is constitutional."** This phrase in law 2 needs disambiguating, because English gives the word _constitutional_ two readings. It does not mean "the change complies with the constitution" as in "that law is constitutional". It means "the change belongs to the constitutional class", that is, it touches constitution-level files and therefore must follow the constitutional procedure: present the full diff plus the matrix row justifying it, stop, take effect only after human ratification and a restart, and never approve your own work. Read it as "every `.claude` change has constitutional status", a classification that triggers a process, not a verdict of compliance.
 
-**Tools fields.** The `tools:` key in each agent file's frontmatter, the fence just described; "fields" because it is one named field in the YAML. Its values are tool names: the perception bundle (Read, Grep, Glob), the mutation pair (Edit for existing files, Write for new ones), execution (Bash), research (WebSearch, WebFetch), and MCP tools by their full names (mcp__postgres__run_query). The seed's law 3 says "no omitted tools fields" because of a dangerous default: an agent file with no tools line does not get zero tools, it inherits all of them, everything the parent session has. Omission is the widest grant, so every agent file must carry the field explicitly.
+**Tools fields.** The `tools:` key in each agent file's frontmatter, the fence just described; "fields" because it is one named field in the YAML. Its values are tool names: the perception bundle (Read, Grep, Glob), the mutation pair (Edit for existing files, Write for new ones), execution (Bash), research (WebSearch, WebFetch), and MCP tools by their full names (mcp__postgres__run_query). The seed's law 3 says "no omitted tools fields" because of a dangerous default - recall that an agent file with no tools line does not get zero tools, it inherits all of them, everything the parent session has. Omission is the widest grant, so every agent file must carry the field explicitly.
 
-**Channel discipline, and what a channel is.** A channel is a pathway by which information reaches an agent, and there are exactly three, distinguished by audience and lifetime: shared memory (CLAUDE.md plus its imports, read by every session and every agent, permanent), the role file (one agent's body, read by that agent on every invocation, permanent), and task text (the prompt for one delegation, read once, ephemeral). Channel discipline is the rule that every fact lives in the channel matching who needs it and for how long: facts everyone always needs go to CLAUDE.md (with the budgets law 4 sets, at most 150 lines and 8 hard rules, because that file taxes every context); a role's standing procedure goes in its file, which must stay timeless; the specifics of one job go in the prompt. The misplacements the discipline forbids are the classic authoring bugs: per-task detail fossilized in a role file goes stale; procedure repeated in prompts drifts; a universal law stated in only one agent's file is innocently violated by the other nine.
+**Channel discipline, and what a channel is.** A channel is a pathway by which information reaches an agent, and there are exactly three, distinguished by audience and lifetime: shared memory using CLAUDE.md plus its imports, read by every session and every agent, permanent; the role file with one agent's body, read by that agent on every invocation, permanent; and task text as the prompt for one delegation, read once, ephemeral. Channel discipline is the rule that every fact lives in the channel matching who needs it and for how long: facts everyone always needs go to CLAUDE.md, preferably with the budgets law 4 sets, at most 150 lines and 8 hard rules, because that file taxes every context; a role's standing procedure goes in its file, which must stay timeless; the specifics of one job go in the prompt. The misplacements the discipline forbids are the classic authoring bugs: per-task detail fossilized in a role file goes stale; procedure repeated in prompts drifts; a universal law stated in only one agent's file is innocently violated by the other nine.
 
-**"Procedure: read matrix", when the seed prompt supplies no matrix.** Resolved by when things happen. At seed time nothing is read: Phase 0 writes the words "read the matrix" into a file, defining a procedure the way a function signature defines a parameter, with no argument needed yet. The argument arrives at the first invocation: the Phase 1 prompt is the matrix, serialized into English by you (that is why it is so long), because in an empty world task text is the only channel that exists. Part of the factory-engineer's Phase 1 output is docs/agents.md, the matrix's permanent home; from then on "read matrix" resolves as an ordinary Read of that file, which CLAUDE.md also imports into every context. And if someone ever invokes the agent with no matrix on disk and none in the prompt, the procedure fails correctly: a transcriber with no source must stop and report the missing input (the BLOCKED-ON pattern) rather than invent authority, which is precisely the property law 1 exists to guarantee.
+**"Procedure: read matrix", when the seed prompt supplies no matrix.** Resolved by when things happen. At seed time nothing is read: Phase 0 writes the words "read the matrix" into a file, defining a procedure the way a function signature defines a parameter, with no argument needed yet. The argument arrives at the first invocation: the Phase 1 prompt is the matrix, serialized into English by the human engineer and that is why it is so long, because in an empty world task text is the only channel that exists. Part of the factory-engineer's Phase 1 output is docs/agents.md, the matrix's permanent home; from then on "read matrix" resolves as an ordinary Read of that file, which CLAUDE.md also imports into every context. And if someone ever invokes the agent with no matrix on disk and none in the prompt, the procedure fails correctly: a transcriber with no source must stop and report the missing input, e.g., the BLOCKED-ON pattern rather than invent authority, which is precisely the property law 1 exists to guarantee.
 
-The authority matrix is mentioned in the seed prompt, but not used. The seed prompt is not asking the session to build the agent system from a matrix; it is asking it to write a file describing an agent that will, whenever invoked, work from a matrix. The phrase "from an authority matrix" is content being written into the file: it ends up inside the description and inside law 1 ("transcribe the authority matrix (docs/agents.md); you do not legislate"). Writing those words requires no matrix, the same way writing a function signature `transcribe(matrix)` requires no particular matrix in hand. Phase 0 defines the function; nothing calls it yet. So the Phase 0 session knows everything it needs to know: the words to write. The reference inside those words is deliberately a forward reference, and note that the seed text even gives it a definite future address, the parenthetical "(docs/agents.md)", a file that does not exist yet.
+Recall that the authority matrix is mentioned in the seed prompt, but not used. The seed prompt is not asking the session to build the agent system from a matrix; it is asking it to write a file describing an agent that will, whenever invoked, work from a matrix. The phrase "from an authority matrix" is content being written into the file: it ends up inside the description and inside law 1 ("transcribe the authority matrix (docs/agents.md); you do not legislate"). Writing those words requires no matrix, the same way writing a function signature `transcribe(matrix)` requires no particular matrix in hand. Phase 0 defines the function; nothing calls it yet. So the Phase 0 session knows everything it needs to know - the words to write. The reference inside those words is deliberately a forward reference, and note that the seed text even gives it a definite future address, the parenthetical "(docs/agents.md)", a file that does not exist yet.
 
-Second, the matrix enters at the first invocation, and it enters through the prompt at the Phase 1 prompt: after the opening sentence "Use the factory-engineer agent to create the rest of the TaskForge agent system from this authority matrix", everything that follows is the matrix, serialized into English. The ten agents with their fences (reviewer: Read/Grep/Glob/Bash only; migrator: plus the postgres read tool...), the ownership assignments, the escalation policy (rollbacks autonomous, applies human-run, constitutional changes human-ratified), the floor contents. The tutorial's section 4 exists precisely to prepare this: it tells you to write the matrix as a table on paper and says "in Phase 1 you will hand it, serialized into one prompt, to the factory-engineer". The reason it travels by prompt rather than by file is the time-zero property discussed for the seed itself: of the three channels an agent system normally uses (shared memory, role file, task text), only task text exists in an empty world, so the first delivery of the matrix has no other way in.
+Second, the matrix enters at the first invocation, and it enters through the prompt at the Phase 1. After the opening sentence "Use the factory-engineer agent to create the rest of the TaskForge agent system from this authority matrix", everything that follows is the matrix, serialized into English. The ten agents with their fences, e.g., reviewer: Read/Grep/Glob/Bash only; migrator: plus the postgres read tool and so on ..., the ownership assignments, the escalation policy (rollbacks autonomous, applies human-run, constitutional changes human-ratified), the floor contents. The tutorial's section 4 tells you to write the matrix as a table on paper and says "in Phase 1 you will hand it, serialized into one prompt, to the factory-engineer". The reason it travels by prompt rather than by file is the time-zero property discussed for the seed itself: of the three channels an agent system normally uses (shared memory, role file, task text), only task text exists in an empty world, so the first delivery of the matrix has no other way in.
 
-Third: after Phase 1, the reference stops dangling, because resolving it is part of the factory-engineer's own first job. Among the artifacts the Phase 1 prompt orders is docs/agents.md, the ownership map and escalation policy, which is exactly the matrix written into its durable home. From that moment the dependency inverts: docs/agents.md exists in the repository, CLAUDE.md imports it into every context, and the factory-engineer's procedure step 1 ("read the current authority matrix and the change request") resolves by an ordinary Read of a real file. Every later invocation, for the rest of the system's life, gets the matrix from disk, and your Phase 1 prompt was the one and only time it traveled as prose. This is the standard migration pattern of the genesis, applied to its most important document: content is carried by task text exactly once, while the world is empty, and then moves to the durable channel where it belongs.
+Finally, after Phase 1, the reference stops dangling, because resolving it is part of the factory-engineer's own first job. Among the artifacts the Phase 1 prompt orders is docs/agents.md, the ownership map and escalation policy, which is exactly the matrix written into its durable home. From that moment the dependency inverts: docs/agents.md exists in the repository, CLAUDE.md imports it into every context, and the factory-engineer's procedure step 1 ("read the current authority matrix and the change request") resolves by an ordinary Read of a real file. Every later invocation, for the rest of the system's life, gets the matrix from disk, and your Phase 1 prompt was the one and only time it traveled as prose. This is the standard migration pattern of the genesis, applied to its most important document: content is carried by task text exactly once, while the world is empty, and then moves to the durable channel where it belongs.
 
 Two edge cases complete the picture. If someone invoked the factory-engineer in a world where no matrix exists and none is supplied in the prompt, the correct behavior falls out of its design: procedure step 1 finds nothing to read, and a transcriber with no source must stop and report the missing input rather than invent authority; that is the verify-don't-assume rule plus the BLOCKED-ON protocol doing their job, and it is a designed refusal, not a malfunction. And on provenance: even docs/agents.md is not the true origin of the matrix; your paper design from the tutorial's section 4 is. The Phase 1 gate has you review the generated docs/agents.md against your own table, which is what makes the on-disk matrix a ratified serialization of human intent rather than something the factory wrote for itself. The chain of custody runs: your design, serialized into the Phase 1 prompt, transcribed by the factory, ratified by you, and only then cited by every future invocation. The seed prompt's unresolved phrase is the first link of that chain, written before the chain exists, which is exactly what a constitution does when it refers to laws not yet passed.
 
-Step 0.4. What happens while it runs, and why. There is no routing decision here: no agents exist, so the plain session executes the instruction itself rather than delegating. It will propose one Write tool call, creating `.claude/agents/factory-engineer.md`. Because no `settings.json` exists yet, there is no allow list, so the CLI shows you an interactive approval prompt for that file creation; approve it. Nothing else fires: no PostToolUse formatter (no hooks exist), no Stop-hook check (no marker machinery exists). The session then prints the complete file content in its reply, because the prompt's last sentence demanded it; that printed copy is what you review in the next step without having to open the file. Note why this prompt is so much longer than every prompt that follows it: it must carry both the specification and the discipline, because there is no agent file yet to carry the discipline. From Phase 1 on, prompts shrink to specifications only.
+Step 0.4. There is no routing decision here, since no agents exist, so the plain session executes the instruction itself rather than delegating. It will propose one Write tool call, creating `.claude/agents/factory-engineer.md`. Because no `settings.json` exists yet, there is no allow list, so the CLI shows you an interactive approval prompt for that file creation; approve it. Nothing else fires: no PostToolUse formatter (no hooks exist), no Stop-hook check (no marker machinery exists). The session then prints the complete file content in its reply, because the prompt's last sentence demanded it; that printed copy is what you review in the next step without having to open the file. Note why this prompt is so much longer than every prompt that follows it: it must carry both the specification and the discipline, because there is no agent file yet to carry the discipline. From Phase 1 on, prompts shrink to specifications only.
 
-What we see is the exact mechanics of how the model changes anything on your machine. The model itself cannot change your filesystem, it can only produce text. Claude Code turns some of that text into effects through a fixed set of tools: Read, Write, Edit, Bash, Grep, and so on. When the model wants to create a file, it does not somehow write bytes to disk; it emits a structured request, essentially a small typed message that says "invoke the tool named Write with these parameters":
+The model itself cannot change your filesystem, it can only produce text. Claude Code turns some of that text into effects through a fixed set of tools: Read, Write, Edit, Bash, Grep, and so on. When the model wants to create a file, it does not somehow write bytes to disk; it emits a structured request, essentially a small typed message that says "invoke the tool named Write with these parameters".
 
 ```text
 Write(
@@ -871,9 +867,9 @@ Write(
 )
 ```
 
-That structured request is a tool call, and one Write call carries the complete file: the path and the entire content in a single invocation (as opposed to creating an empty file and growing it with many Edit calls). "One Write tool call" in the Phase 0 text means exactly that: the seed prompt's whole output is a single such request creating the one file whole.
+That structured request is a tool call, and one Write call carries the complete file: the path and the entire content in a single invocation as opposed to creating an empty file and growing it with many Edit calls. "One Write tool call" in the Phase 0 text means that the seed prompt's whole output is a single such request creating the one file whole.
 
-Emitting the request does not execute it, since the request goes to the Claude Code runtime, which decides what happens next, in three possible ways. If a permission rule in settings.json pre-approves this kind of call, the runtime executes it immediately. If a deny rule matches, the runtime refuses it, full stop. If neither matches, the runtime pauses and shows you an interactive approval prompt in the terminal, something shaped like:
+Emitting the request does not execute it, since the request goes to the Claude Code runtime, which decides what happens next, in three possible ways. If a permission rule in settings.json pre-approves this kind of call, the runtime executes it immediately. If a deny rule matches, the runtime refuses it, full stop. If neither matches, the runtime pauses and shows you an interactive approval prompt in the terminal, something like the following.
 
 ```text
 Claude wants to create a file:
@@ -881,25 +877,25 @@ Claude wants to create a file:
 [y] approve   [n] reject   (view diff)
 ```
 
-Only when you approve does the runtime actually perform the write. Then it hands a result message back to the model ("file created"), and the model continues from there. So the full cycle is: model proposes, runtime consults permissions and hooks, human approves where required, runtime executes, result returns to the model. The model sits at the start of that chain and never at the end of it, which is why "propose" is the accurate verb everywhere in the tutorial: agents propose tool calls; the floor and you dispose of them.
+Only when the human architect approves does the runtime actually perform the write. Then it hands a result message back to the model ("file created"), and the model continues from there. So the full cycle is: model proposes, runtime consults permissions and hooks, human approves where required, runtime executes, result returns to the model. The model sits at the start of that chain and never at the end of it, which is why "propose" is the accurate verb everywhere in the tutorial: agents propose tool calls; the floor and you dispose of them.
 
 In Phase 0 specifically, the reason you are told to expect the interactive prompt is the empty starting state: no settings.json exists yet, so there is no allow list to pre-approve the write and no deny list to block anything. Every tool call in that session falls into the third case and comes to you for manual approval. That is also a nice one-time glimpse of the machinery: you see the raw approval flow exactly once, in the seed session, and then Phase 1 creates the permission lists that make routine calls (sbt, git add, file edits during genesis) flow without prompting while catastrophic ones become impossible. The same cycle is what the hooks instrument: PreToolUse runs after the model proposes and before the runtime executes (that is where the guard can exit 2 and block), and PostToolUse runs after execution (that is where the formatter fires). The tool call is the unit that the entire deterministic floor operates on.
 
-One more concrete detail worth knowing: everything an agent does is a sequence of these calls, visible in the transcript as it runs. When Phase 2 says the build-engineer "Writes the six files, then runs sbt Test/compile", what you literally watch in the terminal is six Write proposals followed by a Bash proposal with `command: "sbt Test/compile"`, each passing through the same propose, gate, execute, return cycle.
+One more concrete detail worth knowing is that everything an agent does is a sequence of these calls, visible in the transcript as it runs. When Phase 2 says the build-engineer "Writes the six files, then runs sbt Test/compile", what you literally watch in the terminal is six Write proposals followed by a Bash proposal with `command: "sbt Test/compile"`, each passing through the same propose, gate, execute, return cycle.
 
-Step 0.5. Verify the on-disk state. In the session, or from a second terminal in the same directory:
+Step 0.5. Verify the on-disk state. In the session, or from a second terminal in the same directory execute the following command.
 
 ```bash
 find . -type f -not -path './.git/*'
 ```
 
-Expected output, exactly one line:
+Expected output, exactly one line is shown below.
 
 ```text
 ./.claude/agents/factory-engineer.md
 ```
 
-If more files appear (a README, a CLAUDE.md the session helpfully added), that is the helpfulness-bias failure mode: the prompt said "and nothing else", and anything else gets deleted now, in-session ("remove every file except .claude/agents/factory-engineer.md"). Then check the file's shape:
+If more files appear (a README, a CLAUDE.md the session helpfully added), that is the helpfulness-bias failure mode: the prompt said "and nothing else", and anything else gets deleted now, in-session ("remove every file except .claude/agents/factory-engineer.md"). Then check the file's content using the following commands.
 
 ```bash
 head -8 .claude/agents/factory-engineer.md
@@ -910,14 +906,14 @@ Expected: the first line is `---`, followed by `name: factory-engineer`, a multi
 
 Step 0.6. Your gate, the first constitutional review. Compare the file line by line against [Appendix A](#appendix-a-the-seed-agent-file). Wording may differ; substance may not. The specific checks, in order of importance: the `tools:` line reads exactly `Read, Grep, Glob, Write, Edit, Bash` (no MCP names, nothing omitted); law 2 contains both halves, ratification-before-effect and never-self-approved; law 5 lists the floor invariants it may never remove (guard patterns, stop_hook_active, formatter exit 0, the deny rules); the description contains "FROM SCRATCH" and "never self-ratifies"; and the boundaries name the four owners it must route to instead of acting (feature-implementer, build-engineer, db-migrator, infra-engineer). These lines are what make it safe to let this one agent write all the others; give them character-level attention.
 
-Step 0.7. Commit and restart, so the agent loads:
+Step 0.7. Commit and restart, so the agent loads and the progress will go into the git repo.
 
 ```bash
 git add -A
 git status
 ```
 
-Expected status: one new file staged, nothing else:
+Expected status is one new file staged, nothing else.
 
 ```text
 Changes to be committed:
@@ -928,7 +924,7 @@ Changes to be committed:
 git commit -m "genesis 0: seed - factory-engineer"
 ```
 
-Expected commit output, one file, roughly fifty insertions:
+Expected commit output, one file, roughly fifty insertions.
 
 ```text
 [main (root-commit) abc1234] genesis 0: seed - factory-engineer
@@ -940,11 +936,11 @@ exit
 claude
 ```
 
-Agent definitions are read at session start, which is why the restart is part of the phase and not an optional flourish: the file you just ratified is inert in the old session and live in the new one. Verify the load in the fresh session by asking "what agents are available?" and expect factory-engineer, alone, in the list. End state of the repository: one commit, one file, one agent, and everything that follows flows through it.
+Agent definitions are read at session start, which is why the restart is part of the phase and not an optional flourish: the file you just ratified is inactive in the old session and live in the new one. Verify the load in the fresh session by asking "what agents are available?" and expect factory-engineer, alone, in the list. End state of the repository: one commit, one file, one agent, and everything that follows flows through it.
 
-Failure branches. File created at the wrong path (`.claude/agents.md`, or `agents/factory-engineer.md` without the leading `.claude/`): ask the session to move it to the exact path and re-verify with find. Agent not listed after restart: either the path is wrong or the frontmatter fences are broken; check `head -1` prints `---` with no leading spaces. Session wrote a plausible but different agent (wrong tools, missing laws): do not edit it into shape by hand in fragments; re-run the seed prompt against the deleted file, because the prompt is cheap and the review against Appendix A is the gate that matters.
+Failure branches should be detected and dealt with. If a file is created at the wrong path (`.claude/agents.md`, or `agents/factory-engineer.md` without the leading `.claude/`), ask the session to move it to the exact path and re-verify with find. If an agent not listed after restart, check to see either the path is wrong or the frontmatter fences are broken; check `head -1` prints `---` with no leading spaces. If a session wrote a plausible but different agent (wrong tools, missing laws), do not edit it into shape by hand in fragments; re-run the seed prompt against the deleted file, because the prompt is cheap and the review against Appendix A is the gate that matters.
 
-Your gate is to compare the created file line by line against [Appendix A](#appendix-a-the-seed-agent-file), which contains the reference text. Pay closest attention to law 2 (never self-ratifies) and law 5 (floor invariants): these two lines are what make it safe to let this agent write all the others.
+Your gate for this tutorial only is to compare the created file line by line against [Appendix A](#appendix-a-the-seed-agent-file), which contains the reference text. Pay closest attention to law 2 (never self-ratifies) and law 5 (floor invariants): these two lines are what make it safe to let this agent write all the others.
 
 Now, after exiting claude, restart, so the agent loads.
 
@@ -954,13 +950,13 @@ claude
 
 ### Phase 1: the factory builds the factory
 
-Goal: the complete agent system exists: CLAUDE.md, docs/agents.md (the ownership map), nine more agent files, three hooks, settings.json, .mcp.json, and three command files. All of it is authored by the factory-engineer from the [authority matrix](#4-the-authority-matrix), serialized into one prompt.
+_Goal_: the complete agent system exists: CLAUDE.md, docs/agents.md (the ownership map), nine more agent files, three hooks, settings.json, .mcp.json, and three command files. All of it is authored by the factory-engineer from the [authority matrix](#4-the-authority-matrix), serialized into one prompt.
 
 Step 1.1. In the fresh session, give this prompt, verbatim:
 
 > Use the factory-engineer agent to create the rest of the TaskForge agent system from this authority matrix. System: Scala 3 three-tier task-management web app (http4s presentation tier plus static HTML/JS frontend; pure business-logic tier on cats-effect IO; doobie/PostgreSQL data tier; upickle for ALL JSON), deployed on AWS ECS Fargate plus RDS via Terraform. Create: (1) CLAUDE.md: identity; three-tier table with May-depend and Must-NOT-depend columns; commands with `sbt check` as the definition of done; hard rules (one owning agent per artifact class with the ownership map, upickle-only JSON, applied migrations immutable, every change ships a test, secrets only via Secrets Manager, infra only via Terraform); an @docs/agents.md import. (2) docs/agents.md: the ARTIFACT OWNERSHIP MAP (artifact class, creating agent, version-bump agent, gate) and lifecycle table for TEN agents: factory-engineer (exists, list it), build-engineer (creates build.sbt/project/scalafmt/compose/gitignore from scratch; sole owner of build structure), feature-implementer (src/** only; routes dependency needs to build-engineer), test-engineer, code-reviewer (with an Ownership review axis), db-migrator, infra-engineer (creates terraform plus scripts plus workflows from scratch; plans only, human applies), deploy-engineer (executes scripts it does not author), incident-responder, dependency-updater (version ledger only); plus the escalation policy (rollbacks autonomous; data/schema/security to humans; destructive DDL human-signed; applies human-run; constitutional changes human-ratified). (3) The nine remaining agent files per the matrix with least-privilege fences (reviewer: Read/Grep/Glob/Bash only; migrator: plus mcp__postgres__run_query; deploy: plus mcp__aws-api__call_aws and mcp__ecs__ecs_resource_management; responder: plus ecs_troubleshooting_tool and postgres read; updater: plus WebSearch/WebFetch, Edit but not Write; infra: plus mcp__aws-api__call_aws). (4) Hooks plus settings.json: PostToolUse scalafmt (exit 0); PreToolUse Bash guard (DROP/TRUNCATE/terraform destroy/force-deletes, exit 2, message says a human must run it); Stop hook via a .claude/.last-test-run marker with the stop_hook_active guard; permissions: allow sbt, git bookkeeping, docker build, read-only aws, terraform plan and validate; deny terraform apply and destroy, rds/ecr deletes, force-push, .env reads. (5) .mcp.json: awslabs postgres (readonly), aws-api, ecs (ALLOW_WRITE=false), terraform via uvx; github via HTTP. (6) .claude/commands/: /deploy, /rollback, /incident naming their responsible agents and gates. No application code. Present the full diff with per-file matrix justifications and your audit results, then stop for ratification.
 
-Step 1.2. What happens, and which instruction causes it:
+Step 1.2. What happens and which instruction causes it can be seen in the table below.
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -971,7 +967,7 @@ Step 1.2. What happens, and which instruction causes it:
 | The agent reports collision and orphan audit results | its procedure step 3 |
 | settings.json and .mcp.json are parsed with python, hooks get bash -n and chmod +x | its procedure step 4 |
 
-Step 1.3. Your gate, the big constitutional review. Read every drafted file against the matrix. Check the tools lines character by character (a wrong fence is a standing vulnerability, and this is the cheapest moment to catch one). Then ratify:
+Step 1.3. Your gate, do the big constitutional review. Read every drafted file against the matrix. Check the tools lines character by character (a wrong fence is a standing vulnerability, and this is the cheapest moment to catch one). Then _ratify_ by executing the commands below.
 
 ```bash
 git add -A && git commit -m "genesis 1: the factory, built by the factory"
@@ -979,11 +975,16 @@ exit
 claude
 ```
 
-To clarify, a session is one running invocation of `claude`: one process, one continuous conversation, one loaded configuration. Starting a new one does two separate things, and both matter for the probes. First, a fresh session re-reads the world from disk at startup. Agent definitions in `.claude/agents/`, the hooks and permission lists in `settings.json`, the MCP servers in `.mcp.json`, and CLAUDE.md are all loaded when the session starts. The session that wrote those files during Phase 1 was itself launched when none of them existed, so inside it the factory is just text it happens to have written: the ten agents are not registered, the guard hook is not wired, the permission lists are not in force. The exit-and-restart is what turns the ratified files from repository content into live machinery. This is also why the tutorial treats restart as the final step of every constitutional change, not as housekeeping: the factory-engineer's law says its diffs take effect only after "human ratification and restart", and the restart is the taking-effect.
+To clarify, a session is one running invocation of `claude`: one process, one continuous conversation, one loaded configuration. Starting a new one does two separate things, and both matter for the probes. First, a fresh session re-reads the world from disk at startup. Agent definitions in `.claude/agents/`, the hooks and permission lists in `settings.json`, the MCP servers in `.mcp.json`, and CLAUDE.md are all loaded when the session starts. The session that wrote those files during Phase 1 was itself launched when none of them existed, so inside it the factory is just text it happens to have written: the ten agents are not registered, the guard hook is not wired, the permission lists are not in force. The exit-and-restart is what turns the ratified files from repository content into live machinery. This is also why the tutorial treats restart as the final step of every constitutional change: the factory-engineer's law says its diffs take effect only after "human ratification and restart", and the restart is the taking-effect.
 
-Second, a fresh session has an empty conversation, and that emptiness is what makes the probes honest. The probes are empirical tests of the runtime, and they can be corrupted from both directions by a stale conversation. In the old session, asking "what agents are available?" would produce a false answer in whichever direction you least expect: possibly a false negative (the runtime never loaded them, so nothing is listed even though the files are perfect), but just as dangerously a false positive, because that session's conversation memory contains the full text of all ten agents it just wrote, and a model asked about agents may helpfully answer from what it remembers writing rather than from what the runtime actually registered. You would read "yes, ten agents available" and learn nothing about whether the machinery works. The fresh session knows nothing except what loads from disk, so its answers can only come from the real registry, the real hook wiring, the real router. That is exactly what the three probes are designed to test: the listing probe checks the registry, the DROP TABLE probe checks that the guard hook actually fires (mechanism you have not seen fire is mechanism you do not have), and the build.sbt boundary probe checks that routing and the ownership boundaries govern a fresh context that never saw them written.
+Second, a fresh session has an empty conversation, and that emptiness is what makes the probes empirical tests of the runtime, otherwise, they can be corrupted from both directions by a stale conversation. In the old session, asking "what agents are available?" would produce a false answer in whichever direction you least expect: possibly a false negative (the runtime never loaded them, so nothing is listed even though the files are perfect), but just as dangerously a false positive, because that session's conversation memory contains the full text of all ten agents it just wrote, and a model asked about agents may helpfully answer from what it remembers writing rather than from what the runtime actually registered. The human architect would read "yes, ten agents available" and learn nothing about whether the machinery works. The fresh session knows nothing except what loads from disk, so its answers can only come from the real registry, the real hook wiring, the real router. That is exactly what the three probes are designed to test: the listing probe checks the registry, the DROP TABLE probe checks that the guard hook actually fires (mechanism you have not seen fire is mechanism you do not have), and the build.sbt boundary probe checks that routing and the ownership boundaries govern a fresh context that never saw them written.
 
-For completeness, the neighboring terms the tutorial uses: "restart" is the pair exit-then-claude, and it is the act that completes ratification; "/clear" wipes the conversation within a running session; the tutorial's convention of one phase per session (fresh session or /clear between phases) uses it for context hygiene, so each phase starts with CLAUDE.md re-anchoring and no leftover discussion steering the model. But after constitutional changes specifically, the tutorial always says full restart, because the point there is configuration reload, not just a clean conversation. And note the distinction from subagent contexts: every delegation to an agent creates a fresh context for that agent automatically (Mechanism 2), no restart needed; "session" refers to the top-level conversation you type into, and it is the thing that must be born after the factory files exist in order to live under their government.
+For completeness, the neighboring terms the tutorial uses are the following.
+- "restart" is the pair exit-then-claude, and it is the act that completes ratification; 
+- "/clear" wipes the conversation within a running session; 
+- the tutorial's convention of one phase per session (fresh session or /clear between phases) uses it for context hygiene, so each phase starts with CLAUDE.md re-anchoring and no leftover discussion steering the model. But after constitutional changes specifically, the tutorial always says full restart, because the point there is configuration reload, not just a clean conversation. 
+
+Note the distinction from subagent contexts: every delegation to an agent creates a fresh context for that agent automatically (Mechanism 2), no restart needed; "session" refers to the top-level conversation you type into, and it is the thing that must be born after the factory files exist in order to live under their government.
 
 Step 1.4. Probe the floor before trusting it. Mechanism you have not seen fire is mechanism you do not have. Run these three probes in the fresh session.
 
@@ -991,7 +992,7 @@ Step 1.4. Probe the floor before trusting it. Mechanism you have not seen fire i
 > what agents are available?
 ```
 
-Expect all ten listed. If not: the files are in the wrong directory or the frontmatter fences (the two --- lines) are malformed.
+Expect all ten listed. If not, the files are in the wrong directory or the frontmatter fences (the two --- lines) are malformed.
 
 ```text
 > run this command: echo 'DROP TABLE tasks'
@@ -1006,6 +1007,7 @@ Expect a loud block. The PreToolUse guard hook matches the string DROP TABLE ins
 Expect a refusal that names build-engineer. The cause is feature-implementer law 6 (the build is not yours) plus its boundaries section; this is the ownership rule firing. If the implementer complies instead, its file is missing the boundary; route the fix through the factory-engineer and re-ratify.
 
 ![img.png](docs/img.png)
+
 
 ## Phase 2: build-engineer creates build.sbt and the project skeleton
 
