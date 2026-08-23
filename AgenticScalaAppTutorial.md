@@ -1708,11 +1708,11 @@ Compressed to a formula you can apply to any new system: fix the action menu the
 
 The seed prompt looks like a long instruction, but every clause in it is the conclusion of a derivation that starts from one sentence about the desired end state. If you know the derivation, you can write the seed prompt for any agent system, and you can defend every word of it when someone asks why it is there. The chain has seven steps.
 
-**Step 1: state the end state, and notice it forces a fixed point**. The system to be created is one where every artifact is authored and maintained by agents under invariants, with human authorship at zero. Now apply closure: agent definition files are themselves artifacts in the repository. If all artifacts are agent-authored, then some agent must author agent files. That agent is not a design preference; it is forced by the closure property. That is, we distinguish two kinds of things that show up in a design: things we chose, which could have been otherwise, and things entailed by what we already chose, which cannot. It claims the factory-engineer is the second kind, and the argument is a three-line syllogism.
+**Step 1: state the end state, and notice it forces a fixed point**. The system to be created is one where every artifact is authored and maintained by agents under invariants, with human authorship at zero. Now apply closure where agent definition files are themselves artifacts in the repository. If all artifacts are agent-authored, then some agent must author agent files. That agent is not a design preference; it is forced by the closure property. That is, we distinguish two kinds of things that show up in a design: things we chose, which could have been otherwise, and things entailed by what we already chose, which cannot. It claims the factory-engineer is the second kind, and the argument is a three-line syllogism.
 
-Premise 1 is the end-state requirement you set for the system: every artifact in the repository is authored and maintained by some agent, with human authorship at zero. Premise 2 is an observation about the world: agent definition files are themselves artifacts in the repository; they are ordinary text files that must be created, evolved, and kept correct like everything else. The conclusion follows with no room for taste: some agent must author and maintain agent definition files. That agent is the factory-engineer. You still have plenty of freedom about it (its name, its laws, whether the role is one agent or split into two), but its existence is not on the menu. Delete it and you do not get a leaner design; you get a contradiction with premise 1: either a human hand-writes the agent files (so authorship is not zero, and the artifact class ".claude" has no owning agent, breaking the one-writer rule too), or the agent files are maintained by nobody and the system cannot evolve.
+Premise 1 is the end-state requirement you set for the system: every artifact in the repository is authored and maintained by some agent, with human authorship at zero. Premise 2 is an observation about the world: agent definition files are themselves artifacts in the repository; they are ordinary text files that must be created, evolved, and kept correct like everything else. The conclusion follows that some agent must author and maintain agent definition files. That agent is the factory-engineer. You still have plenty of freedom about it (its name, its laws, whether the role is one agent or split into two), but its existence is not on the menu. Delete it and you get a contradiction with premise 1: either a human hand-writes the agent files (so authorship is not zero, and the artifact class ".claude" has no owning agent, breaking the one-writer rule too), or the agent files are maintained by nobody and the system cannot evolve.
 
-The "closure property" is where a set is closed under an operation if applying the operation never takes you outside the set: integers are closed under addition (any two integers sum to an integer) but not under division (one divided by two leaves the set). Here the set is "artifacts authored by agents" and the requirement is that the whole repository lies inside it. The twist that generates the forced agent is self-reference: the agents are themselves described by repository artifacts, so the set must contain its own means of production. A system closed under "who writes this?" must contain a writer of writers.
+The _closure property_ is where a set is closed under an operation if applying the operation never takes you outside the set: integers are closed under addition (any two integers sum to an integer) but not under division (one divided by two leaves the set). Here the set is "artifacts authored by agents" and the requirement is that the whole repository lies inside it. The twist that generates the forced agent is self-reference: the agents are themselves described by repository artifacts, so the set must contain its own means of production. A system closed under "who writes this?" must contain a writer of writers.
 
 The pattern is old and appears wherever a system is required to fully account for its own machinery. A self-hosting compiler must be able to compile its own source, so somewhere in the toolchain there is a compiler that compiles compilers, and it too had a bootstrap moment. A machine shop that claims to make all its own equipment must contain machine tools that make machine-tool parts. A legal system that requires every rule change to follow rules must contain rules about changing rules, an amendment clause, and no constitution can omit one without either freezing forever or being changed lawlessly. The factory-engineer is exactly the amendment clause of this system, and the Phase 0 seed is its bootstrap moment, forced by the same logic one step further back: the writer of writers cannot write itself into existence, so the first copy must be injected from outside, once, by hand, which is why the seed exists and why it is kept minimal.
 
@@ -1720,15 +1720,15 @@ There is a coherent alternative design in which the human personally owns and ha
 
 This is where the factory-engineer comes from, and it is why the seed prompt creates that agent and not, say, the build-engineer first: the factory-engineer is the generator of the closed system, and everything else is reachable from it.
 
-**Step 2: face the bootstrap problem, and minimize the ungoverned surface**. The generator cannot author itself into existence; before it exists there are no agents. So something outside the closed system must inject the first element: a plain session, directed by a human. Everything created in that moment is without any of the system's protections, because none exist yet: no fences, no hooks, no permissions, no reviewer. From this follows the minimality principle: the ungoverned act must be as small as possible, because human line-by-line review is the only verification available for it and human review capacity is the scarcest resource in the whole design. The smallest sufficient injection is one file. That derives the prompt's opening clause, including its sternest words: "Create exactly one file... and nothing else." The "and nothing else" is not fussiness; every additional file the seed session created would be another ungoverned artifact competing for the same finite review attention, produced before the rules that should have governed it.
+**Step 2: face the bootstrap problem, and minimize the ungoverned surface**. The generator cannot author itself into existence; before it exists there are no agents. So something outside the closed system must inject the first element with a plain session, directed by a human architect. Everything created in that moment is without any of the system's protections, because none exist yet: no fences, no hooks, no permissions, no reviewer. From this follows the minimality principle stated as the ungoverned act must be as small as possible, because human line-by-line review is the only verification available for it and human review capacity is the scarcest resource in the whole design. The smallest sufficient injection is one file. That derives the prompt's opening clause, including its sternest words: "Create exactly one file... and nothing else." The "and nothing else" is a must since every additional file the seed session created would be another ungoverned artifact competing for the _same finite review attention_, produced before the rules that should have governed it.
 
-**Step 3: derive the file's scope from the ownership analysis, and note why the prompt must enumerate it**. The one file must define an agent capable of generating the rest of the factory, so its jurisdiction is exactly the artifact class "constitution and floor": CLAUDE.md, docs/agents.md, .claude/agents/*, hooks, settings.json, commands, .mcp.json. In a mature system that list would be cited from the ownership map; at seed time no ownership map exists, so the prompt must spell the list out in full. This is a general property of the seed prompt worth seeing clearly: of the three channels an agent system normally uses (shared memory, role files, task text), only task text exists at time zero. The prompt is therefore forced to carry, temporarily, content that belongs in the other two channels. That is why it is the longest prompt in the tutorial, and why every later prompt is shorter: after Phase 1, the content migrates into its proper channels and task text shrinks back to specifications.
+**Step 3: derive the file's scope from the ownership analysis, and note why the prompt must enumerate it**. The one file must define an agent capable of generating the rest of the factory, so its jurisdiction is exactly the artifact class "constitution and floor": CLAUDE.md, docs/agents.md, .claude/agents/*, hooks, settings.json, commands, .mcp.json. In a mature system that list would be cited from the ownership map; at seed time no ownership map exists, so the prompt must spell the list out in full. This is a general property of the seed prompt worth seeing clearly: of the three channels an agent system normally uses. i.e., shared memory, role files, task text, only task text exists at time zero. The prompt is therefore forced to carry, temporarily, content that belongs in the other two channels. That is why it is the longest prompt in the tutorial, and why every later prompt is shorter: after Phase 1, the content migrates into its proper channels and task text shrinks back to specifications.
 
-**Step 4: confront the blast radius, and derive the self-limitation clauses**. The generator's outputs govern every other agent: its files decide who exists, what tools they hold, what laws bind them. It is therefore the maximum-blast-radius component in the system, and the invariant "authority changes only through human disposal" must bind it hardest of all. Three clauses of the prompt fall out of this single requirement. First, "from an authority matrix" plus law 1 (transcribe, never widen or soften unless the matrix changed first): the matrix is the human-owned specification, and making it the generator's input demotes the generator from legislator to transcriber; authority originates with you, and the agent only serializes it. Second, law 2 and the procedure's ending ("present diff and stop... never self-approved"): without this, the system contains a privilege-escalation path where one misrouted or malicious instruction causes the factory to widen every fence and ratify its own change; never-self-ratifies is what keeps the fixed point strictly below human authority. Third, the description's phrasing ("prepares constitutional diffs; never self-ratifies"): the limitation is placed in the routing surface itself, so even the sentence other sessions read when deciding to invoke this agent carries the constraint.
+**Step 4: confront the blast radius, and derive the self-limitation clauses**. The generator's outputs govern every other agent: its files decide who exists, what tools they hold, what laws bind them. It is therefore the maximum-blast-radius component in the system, and the invariant "authority changes only through human instruction" must bind it hardest of all. Three clauses of the prompt fall out of this single requirement. First, "from an authority matrix" plus law 1 (transcribe, never widen or soften unless the matrix changed first): the matrix is the human-owned specification, and making it the generator's input demotes the generator from legislator to transcriber; authority originates with you, and the agent only serializes it. Second, law 2 and the procedure's ending ("present diff and stop... never self-approved"): without this, the system contains a privilege-escalation path where one misrouted or malicious instruction causes the factory to widen every fence and ratify its own change; never-self-ratifies is what keeps the fixed point strictly below human authority. Third, the description's phrasing ("prepares constitutional diffs; never self-ratifies"): the limitation is placed in the routing surface itself, so even the sentence other sessions read when deciding to invoke this agent carries the constraint.
 
-**Step 5: install the system-wide invariants as laws of the generator, because properties propagate only through the generator**. The factory will write the other nine agents, the hooks, and the permission lists. Any property you want those artifacts to have must therefore exist as a law of the factory, since the factory is the only channel through which the property can reach them. Read laws 3 through 5 as exactly this: law 3 is the fence theory compressed into the generator (no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools), so least privilege is not a hope about future files but a rule of the machine that writes them; law 4 is the information architecture (timeless role files, CLAUDE.md budgets, one-run detail in task text), so channel discipline reproduces itself; law 5 is the floor's self-preservation, and it is the subtlest of the three: the factory is the only agent able to edit the floor, so the floor's permanence cannot be enforced by the floor itself and must instead be a law of its sole editor. The general principle: a generator must carry, as its own laws, every invariant you want its outputs to satisfy. That is why the seed prompt reads like a constitution's genome; it is one.
+**Step 5: install the system-wide invariants as laws of the generator, because properties propagate only through the generator**. The factory will write the other nine agents, the hooks, and the permission lists. Any property you want those artifacts to have must therefore exist as a law of the factory, since the factory is the only channel through which the property can reach them. Read laws 3 through 5 as exactly this: law 3 is the fence theory compressed into the generator (no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools), so least privilege is not a hope about future files but a rule of the machine that writes them; law 4 is the information architecture (timeless role files, CLAUDE.md budgets, one-run detail in task text), so channel discipline reproduces itself; law 5 is the floor's self-preservation, and it is the subtlest of the three: the factory is the only agent able to edit the floor, so the floor's permanence cannot be enforced by the floor itself and must instead be a law of its sole editor. The general principle is that a generator must carry, as its own laws, every invariant you want its outputs to satisfy. That is why the seed prompt reads like a constitution's genome.
 
-**Step 6: derive the fence and the procedure from the role's own work**. The tools line (Read, Grep, Glob, Write, Edit, Bash) follows the standard demand-set derivation: Write because it creates files, Edit because it evolves them, the perception bundle to read the matrix and the existing tree, Bash for its mechanical validations, no MCP names because all its artifacts are local, no web tools because it is not a research role. One apparent paradox needs resolving: why may this agent hold Write over the most sensitive files in the repository? Because the safety property was never "the constitution cannot be drafted"; it is "drafts are inert until disposed". Proposal is safe by construction (files in a working tree, in force only after your commit and a restart); disposal is what the gate protects. The procedure clause then encodes the universal verification-tail principle using the only oracles configuration artifacts admit: json parse for the JSON files, bash -n and chmod +x for the hook scripts, plus the two quality audits (collision, orphan) that are the routing layer's tests. And it ends at the disposal boundary: present diff and stop.
+**Step 6: derive the fence and the procedure from the role's own work**. The tools line (Read, Grep, Glob, Write, Edit, Bash) follows the standard demand-set derivation: Write because it creates files, Edit because it evolves them, the perception bundle to read the matrix and the existing tree, Bash for its mechanical validations, no MCP names because all its artifacts are local, no web tools because it is not a research role. This agent hold Write over the most sensitive files in the repository because the safety property was never "the constitution cannot be drafted"; it is "drafts are inert until disposed". Proposal is safe by construction (files in a working tree, in force only after your commit and a restart); disposal is what the gate protects. The procedure clause then encodes the universal verification-tail principle using the only oracles configuration artifacts admit is json parse for the JSON files, bash -n and chmod +x for the hook scripts, plus the two quality audits (collision, orphan) that are the routing layer's tests. And it ends at the disposal boundary to present diff and stop.
 
 **Step 7: close the loop with the review clause**. "Print the full file content in your reply" exists because of Step 2: the seed is the one artifact produced with zero system protection, so it receives zero-trust review, and the prompt arranges for the artifact to be surfaced in-band, in the reply itself, where you can read it against the reference listing without even trusting your own file browsing. The last ungoverned act ends with its output laid on the table for inspection.
 
@@ -1747,26 +1747,112 @@ The whole derivation is given in one table below.
 | validate mechanically (json, bash -n, chmod +x); audits | verification tail using the only oracles config artifacts admit |
 | print the full file content in your reply | zero-trust review of the single ungoverned artifact |
 
-Compressed to an algorithm you can reuse for any system: state the closure property; find the generator it forces; inject the generator minimally and review it with full attention; make it a transcriber of a human-owned spec; forbid self-ratification; install every system-wide invariant as one of its laws; derive its fence from its procedure; end its procedure at the disposal boundary; and surface its first output for zero-trust review. The seed prompt is that algorithm, executed once, in English.
+Compressed to an algorithm you can reuse for any system: state the closure property; find the generator it forces; inject the generator minimally and review it with full attention; make it a transcriber of a human-owned spec; forbid self-ratification; install every system-wide invariant as one of its laws; derive its fence from its procedure; end its procedure at the disposal boundary; and surface its first output for zero-trust review. _The seed prompt is that algorithm, executed once, in English_.
+
+#### Question one: what must exist when this prompt finishes?
+The starting state: an empty git repository, a plain Claude Code session with no agents, no hooks, no CLAUDE.md, and one design commitment, that agents will create every artifact in this project. Everything below follows from that commitment.
+
+The commitment that agents create everything applies to agent definitions too, and something must therefore create them, and that something must itself be an agent, which is the closure property. Since no agent exists yet to create it, exactly one agent file must be written by this plain session, and it must be the agent that creates agents. That fixes the deliverable completely, so the prompt opens by naming it.
+
+> Create exactly one file, `.claude/agents/factory-engineer.md`,
+
+Every word here is determined, not chosen. _Create_, because the verb must be the first token of an imperative the session will map to a Write tool call. Exactly one, because a count is the only scope statement you can verify afterward, with `ls -R .claude`, while an adjective like minimal verifies nothing. The full path, because Claude Code discovers agents by directory convention, and a perfect agent file in the wrong directory is a dead letter that fails silently at the Phase 1 restart. The name factory-engineer, because the file name is the agent name, and the name should state the closure it exists to satisfy: an engineer whose factory produces engineers.
+
+#### Question two: what must not exist?
+
+A model given a creation task scaffolds helpfully by default: a README, a settings stub, a directory layout for later. Each extra file would be an unratified artifact with no owner, in a project whose first principle is that every artifact has one. The counter-instruction must ban the default rather than request restraint, and it must sit adjacent to the grant so no paraphrase can separate them:
+
+> and nothing else:
+
+Three words, placed before the model has produced a single token of content, because early tokens shape the plan and a bound stated last arrives after the scaffolding reflex has fired. This clause and the count are the same rule stated twice, once as cardinality and once as exclusion, which is deliberate redundancy at the single point in the project where no other mechanism exists to catch an overrun.
+
+#### Question three: what is this agent, in one sentence?
+
+The file being created needs an identity, and the prompt must state it before any detail, because everything later (the laws, the tools, the description) is derived from the identity. The identity has three required parts: the role, its complete territory, and its upstream source of authority.
+
+> an agent whose job is to create and maintain the agent system itself (CLAUDE.md, docs/agents.md, all .claude/agents/*, hooks, settings.json, commands, .mcp.json) from an authority matrix.
+
+Create and maintain, both verbs, because an agent scoped only to genesis would be dead weight after Phase 1, and an agent scoped only to maintenance could not perform Phase 1; the pair makes it the permanent owner of the constitutional artifact class. The parenthetical enumeration exists because the agent system itself is an abstraction, and an abstraction left unpinned invites the model to decide its extension; the seven items are the exact constitutional class from the [ownership map](#4-the-authority-matrix), so the sentence and the map can never disagree. From an authority matrix is the most consequential phrase in the prompt, since it establishes, before any law says so, that policy originates somewhere other than this agent, planting the transcribe-not-legislate relationship as part of the agent's identity rather than as a restriction bolted on later.
+
+#### Question four: how will future requests reach it?
+
+An agent file begins with frontmatter, and frontmatter is the routing surface (Mechanism 1), so the prompt must dictate it rather than describe it, because routing tokens are exact strings and paraphrase destroys them:
+
+> Frontmatter: name factory-engineer; a routing-grade description ("Creates and maintains the agent system itself FROM SCRATCH... prepares constitutional diffs; never self-ratifies"); tools Read, Grep, Glob, Write, Edit, Bash.
+
+Routing-grade names the audience of the description, a machine matcher rather than a human reader, which changes how it gets written and the first clause must carry the match alone. FROM SCRATCH is capitalized because it is a routing token, not prose; it claims greenfield requests (add an agent for X, set up a hook for Y) that would otherwise fall to the main session. And the description ends with prepares constitutional diffs; never self-ratifies, a grant and its negation one semicolon apart, riding on the routing surface itself, so the safety property is re-read every time the router glances at this agent. The quotation marks in the prompt mean copy these words; everything outside quotes may be reworded, which is the rule for dictating exactly what must be exact and no more.
+
+Recall the routing mechanism: when your prompt does not name an agent, Claude Code decides who gets the work by reading every agent's description field and matching it against the words of your request. That makes the description two things at once, and they pull in different directions. As prose, it documents what the agent is for. As a routing surface, it is an index entry where a set of words placed there specifically so that future requests, phrased in vocabulary you are predicting today, will land on this agent rather than another. A routing token is a word or phrase included for the second purpose. It is chosen for match value, not readability so that it earns its place by overlapping with how users will actually phrase requests ("set up the build", "create an agent for security scanning"), and a description can be perfectly accurate while containing no good routing tokens at all, which is the failure mode of descriptions written as documentation. FROM SCRATCH is in the factory-engineer's description because "from scratch", "set up", and "new" are the words greenfield requests are made of, and without a token claiming that vocabulary those requests match nothing.
+
+What capitalization does to the model is that capital letters trigger no special mechanism in an LLM, but what actually happens is two ordinary things. First, the model reads text as tokens, and FROM SCRATCH is a different token sequence from from scratch, one the model has overwhelmingly seen in contexts of deliberate emphasis: warnings, headings, legal boilerplate, the MUST and NEVER of RFC 2119. So all-caps reaches the model carrying a learned signal that says this phrase is load-bearing, the author shouted it on purpose, weight it accordingly. Second, and just as important in this project, capitalization protects the token during rewriting. Agent files get regenerated and paraphrased over the system's life, by the factory-engineer itself, and a model paraphrasing prose freely tends to preserve emphatic caps verbatim, the way a human copy editor leaves a shouted word alone. The caps also make the token trivially greppable by you: `grep -r "FROM SCRATCH" .claude/agents/` verifies in one command that the routing claim survived a rewrite. So the honest statement is: capitalization biases attention through learned association, improves the phrase's survival under paraphrase, and gives humans an exact audit string. It guarantees nothing, which is why the routing corpus in `docs/routing-tests.md` exists to test the behavior rather than trust the typography.
+
+Greenfield is a term of art borrowed from construction: building on an empty field, where nothing stands yet, as opposed to brownfield work, which modifies something that already exists. A greenfield request is therefore one that asks for creation where there is currently nothing: "set up the sbt build for this project", "create an agent for dependency audits", "add MCP wiring for Redis". These are the hard case for routing, for a structural reason. A brownfield request usually names an existing artifact, "tighten the code-reviewer's tool list", "change build.sbt", and that artifact name is a strong, almost unmissable match signal. A greenfield request names nothing, because the thing does not exist yet; its vocabulary is all verbs and intentions. So unless some description explicitly claims creation-from-nothing vocabulary, greenfield requests match no agent well and fall to the main session, which then does the work inline, precisely the unaccountable-eleventh-owner failure the ownership rule exists to prevent. FROM SCRATCH is the claim staked on that vocabulary: it tells the router that requests about creating the agent system, not just maintaining it, belong here. The same token appears in the build-engineer's description for the same reason, which is why "set up the build for this project" routes to it even though build.sbt does not exist at the moment of asking.
+
+#### Question five: what may it touch?
+
+The tools line follows from the procedure this agent will need and from nothing else. It must read and audit existing files, so Read, Grep, Glob. It must author files, so Write and Edit. It must validate mechanically, parsing JSON and checking scripts, so Bash. And that is the end of the list, no database tool, no cloud tool, no web tool, because nothing in creating markdown and JSON requires them, and this is least privilege applied to the most dangerous agent in the system, the one whose outputs govern all the others. Stating the list explicitly in the prompt also forecloses the omission default, since an agent file with no tools line inherits every tool in the session, and the seed is the one file no factory audit will ever have checked.
+
+#### Question six: what can go wrong forever?
+
+Task-specific failures are corrected by the next prompt; standing failures need standing law. So the prompt next enumerates the ways this agent could fail permanently, and writes one law per failure mode. This is where each law comes from, threat first, sentence second.
+
+Threat one: the agent drifts from transcriber into legislator, adjusting a fence here, softening a law there, each change locally reasonable. The law: transcribe the authority matrix, never widen a fence or soften a law unless the matrix changed first. Transcribe makes divergence from the matrix a defect by definition; widen and soften name the only dangerous direction, so narrowing stays routine and the law needs no case list.
+
+Threat two: self-application, the agent approving the rules that govern itself. The law that prevents this threat is that every .claude/** change is constitutional with full diff plus justification, in force only after human ratification and restart, never self-approved. In force carries the legal distinction between existing on disk and governing behavior; and restart is in the sentence because agent files load at session start, so a ratified change governs only the next session, a fact the agent must state to you rather than the reverse.
+
+Threat three: capability creep across the team it will create. The law to prevent it is least privilege by default: no omitted tools fields, MCP read-only at server level, reviewer-class agents get no write tools. The term of art imports start-from-zero; the omission clause bans the inherit-everything default by name; reviewer-class binds future reviewers that do not exist yet.
+
+Threat four: content migrating to channels with the wrong lifetime, session details fossilizing in role files, universal rules bloating one file. The law to prevent it is channel discipline: timeless role files, universal facts to CLAUDE.md (at most 150 lines, at most 8 hard rules), one-run detail in task text. The two budgets are there because budgets are countable at review and keep the constitution small enough that every context actually loads and reads it.
+
+Threat five: the floor eroding one rewrite at a time. The law to prevent it is floor invariants that may never be removed, followed by the enumerated list, guard patterns, stop_hook_active check, formatter exit 0, deny rules for terraform apply and destroy, force-push, .env reads. Enumerated, because preserve important safety features would leave importance to the judgment of the thing being constrained.
+
+The prompt calls these iron laws and numbers them. Iron, because guidelines invite weighing and these must win conflicts with any future task text. Numbered, because a numbered law is citable (route the fix per law 2), countable at the gate (five arrived?), and stable across sessions.
+
+#### Question seven: in what order should it work?
+
+An agent with laws but no procedure improvises its sequence, and verification improvised is verification skipped. So the prompt fixes the order as a verb-first pipeline that maps one-to-one onto tool calls the following procedure in the prompt below.
+
+> Procedure: read matrix, author files using the five-section skeleton with collision and orphan audits, validate mechanically (json parse, bash -n, chmod +x), present diff and stop.
+
+Read before author, because transcription requires a source in context. The five-section skeleton (role, laws, procedure, boundaries, report) is named so every file this factory ever produces has the same anatomy, which is what makes Mechanism 4 a mechanism rather than a habit. The collision and orphan audits are the two set-theoretic checks on the ownership map, no artifact class with two writers, none with zero. Validate mechanically excludes self-assessment by naming three commands with exit codes; without the adverb, validate reliably produces a confident paragraph instead. And present diff and stop is the disposal boundary: done means shown, not applied, the first appearance of the split that governs the entire project.
+
+#### Question eight: what comes back to you?
+
+Mechanism 2 makes the reply the only channel that reliably reaches the human, so the prompt's last sentence routes the artifact into the following prompt.
+
+> Print the full file content in your reply.
+
+This is the evidence clause. Your Phase 0 gate is a line-by-line reading against [Appendix A](#appendix-a-the-seed-agent-file), and printing the file in the reply means you review it in the transcript, where it sits next to the prompt that specified it, without trusting that what is on disk matches what you saw.
+
+#### Assembly
+
+Now concatenate the eight answers in the order they were derived, scope, identity, frontmatter, laws, procedure, evidence, and the result is, word for word, the prompt of [Step 0.2](#phase-0-the-seed-agent). The order is itself derived: the bound first because early tokens shape the plan, identity before detail because the laws presuppose it, frontmatter before body because routing is decided before behavior, laws before procedure because procedure operates under law, and the stop clause last because the final token should define done.
+
+The derivation also makes the prompt testable, which is what H.1's word choices purchased. Before running it, you can state its checkable predictions: the session will make exactly one Write call; `ls -R .claude` will show one file; the file will contain the quoted routing tokens verbatim, greppable; five numbered laws will be present; and the session will stop without committing. Step 0.4 is nothing more than checking those predictions.
+
+#### The derivation is the reusable part
+
+Look back over the eight questions and notice what never appeared: Scala, http4s, AWS, TaskForge. The seed prompt is entirely domain-free, and that is the deepest consequence of the closure property: the seed creates the creator, and the domain enters one phase later, through the authority matrix serialized into the Phase 1 prompt. To bootstrap an agent-built system for any other stack, you change nothing in this appendix except the answers' content: the same eight questions, what must exist, what must not, what is it, how is it reached, what may it touch, what fails forever, in what order, what returns, generate the seed for a Rust service, a data pipeline, or a documentation site. The questions are the method; the prompt is just their transcript.
+
 
 <a name="appendixK"></a>
 ## Appendix K: MCP server toolkit
 
 _Model Context Protocol (MCP)_ is a standard for plugging external tool servers into Claude Code, a small separate program that advertises tools, receives calls, and returns results. Tools that come from MCP servers appear in Claude Code as `mcp__<server>__<tool>`, double underscores as separators. So `mcp__postgres__run_query` is the tool named run_query provided by the server named postgres. The built-in tools (Read, Bash, Edit) are part of Claude Code itself; MCP tools are supplied by these pluggable servers, and the prefixed name tells you exactly which server stands behind each one.
 
-Where this particular one comes from in the project: the `.mcp.json` file at the repository root declares a server entry named postgres, pointing at the awslabs PostgreSQL MCP server, launched via uvx, with the connection string supplied through environment expansion (so no credentials enter the repo) and, critically, started with its read-only flag on. When a session starts, Claude Code launches that server process, asks it what tools it offers, and exposes each one under the prefixed name. run_query is the server's core tool: it takes a SQL string as its parameter, executes it against the configured database, and returns the result rows into the calling agent's context.
+Where this particular one comes from in the project: the `.mcp.json` file at the repository root declares a server entry named postgres, pointing at the awslabs PostgreSQL MCP server, launched via `uvx`, with the connection string supplied through environment expansion (so that no credentials enter the repo) and, critically, started with its read-only flag on. When a session starts, Claude Code launches that server process, asks it what tools it offers, and exposes each one under the prefixed name. run_query is the server's core tool: it takes a SQL string as its parameter, executes it against the configured database, and returns the result rows into the calling agent's context.
 
 What the db-migrator uses it for is exactly one thing, its procedure step 1: inspect the live schema before authoring any migration, never assume. In practice that means queries against the catalog, information_schema.columns for a table's real shape, the flyway_schema_history table for what is actually applied, and so on. The repository's migration files describe what should be true; production describes what is true; this tool is how the migrator reads the second instead of trusting the first. The incident-responder holds the same tool for a different purpose, reading pg_stat_activity and lock views during triage.
 
-The safety story is the layered pattern from the MCP posture rule (MCP for eyes, scripts for hands), and it is worth seeing both layers. Layer one is server-level: the process itself runs read-only, so a write or DDL statement is refused by the server no matter who sends it or how the request is phrased; even if the migrator were prompted into attempting an ALTER through this tool, the tool cannot do it. Layer two is agent-level: the tool name appears in exactly two fences (db-migrator and incident-responder), so the other eight agents do not have the capability at all; granting an MCP tool and granting access are the same act, one name in one YAML list. And beneath both, the guard hook still watches Bash for destructive SQL smuggled through psql, a third net with a different weave.
+The layered pattern is mentioned in the MCP posture rule (MCP for eyes, scripts for hands), and it is worth seeing both layers. Layer one is server-level: the process itself runs read-only, so a write or DDL statement is refused by the server no matter who sends it or how the request is phrased; even if the migrator were prompted into attempting an ALTER through this tool, the tool cannot do it. Layer two is agent-level: the tool name appears in exactly two fences (db-migrator and incident-responder), so the other eight agents do not have the capability at all; granting an MCP tool and granting access are the same act, one name in one YAML list. And beneath both, the guard hook still watches Bash for destructive SQL smuggled through psql, a third net with a different weave.
 
 Two operational notes that matter when you build this yourself. The exact tool name is defined by the server implementation, not by you: if the awslabs server renames its tool, or you swap in a different postgres MCP server whose query tool has another name, the fence grant `mcp__postgres__run_query` silently stops matching anything, and the agent loses its eyes with no error at load time; this is why the verification habit says re-probe agents holding MCP names after any change to .mcp.json. And during genesis the tool has nothing to talk to at first: in Phase 4a the world has no live database yet, which is why that prompt explicitly licenses skipping the inspect step once, and says so in the report, rather than letting skipping become normal.
 
-Last, why a dedicated MCP tool instead of just letting the migrator run psql through Bash, which it technically could? It is done because the MCP route is where read-only can be enforced at the server level, results come back structured rather than as terminal scrapings, and credentials live in the server's environment rather than on command lines in transcripts. The Bash route cannot promise any of that, which is exactly the difference between an engineered eye and an open hand.
+Last, why use a dedicated MCP tool instead of just letting the migrator run psql through Bash? It is done because the MCP route is where read-only can be enforced at the server level, results come back structured rather than as terminal scrapings, and credentials live in the server's environment rather than on command lines in transcripts. The Bash route cannot promise any of that, which is exactly the difference between an engineered eye and an open hand.
 
 The prefixed name is manufactured at session start out of two ingredients that exist independently: a server program that defines tools, and a config entry that registers the server. Neither contains the string `mcp__postgres__run_query`; Claude Code derives it. Walking the full lifecycle makes each piece obvious.
 
-Ingredient one: the server program. An MCP server is an ordinary program, in any language, that speaks the Model Context Protocol: JSON-RPC messages over stdin/stdout (or HTTP for remote servers). To qualify, it must answer three requests. `initialize` performs the handshake. `tools/list` returns the catalog of tools the server offers, and this is where a tool is truly created: each entry carries a name (`run_query`), a human-readable description, and a JSON schema for its parameters (for run_query, an object with an `sql` string). `tools/call` executes a named tool with given arguments and returns the result. Writing a server is small work with the SDKs; a complete one in Python:
+Ingredient one: the server program. An MCP server is an ordinary program, in any language, that speaks the Model Context Protocol (MCP): JSON-RPC messages over stdin/stdout (or HTTP for remote servers). To qualify, it must answer three requests. `initialize` performs the handshake. `tools/list` returns the catalog of tools the server offers, and this is where a tool is truly created: each entry carries a name (`run_query`), a human-readable description, and a JSON schema for its parameters (for run_query, an object with an `sql` string). `tools/call` executes a named tool with given arguments and returns the result. Writing a server is small work with the SDKs; a complete one in Python.
 
 ```python
 from mcp.server.fastmcp import FastMCP
@@ -1804,11 +1890,14 @@ Ingredient two: the registration. Claude Code learns the server exists from conf
 
 The key under `mcpServers` is the server's name as this project knows it, and it is the first half of the eventual tool name. The entry says how to start or reach the server: for stdio, a command to spawn as a child process; for remote servers, a URL. Note that server-level policy lives here too: the `--readonly true` argument is an instruction to the server program itself, which is why that enforcement survives anything the model says. The same registration can also be done from the CLI (`claude mcp add ...`) into project, user, or local scope; the checked-in file is used here so every human, agent, and CI run gets identical wiring.
 
-The manufacture, at session start. When you run `claude`, the runtime reads the config, spawns each stdio server as a child process (or connects to each URL), performs the `initialize` handshake, and calls `tools/list` on each. For every tool each server advertises, it constructs a runtime tool named `mcp__<serverName>__<toolName>`: the config key, the advertised name, double underscores as separators. So the postgres server's `run_query` becomes `mcp__postgres__run_query`, and the toy server above would yield `mcp__ledger__lookup_version`. From that moment these are tools like any other: their descriptions and schemas are shown to the model, the model can propose calls to them, and, crucially for this project, the names participate in every control surface: an agent's fence lists them to grant them, permission rules can match them, and a hook matcher like `mcp__.*` catches all of them.
+When you run `claude`, the runtime reads the config, spawns each stdio server as a child process (or connects to each URL), performs the `initialize` handshake, and calls `tools/list` on each. For every tool each server advertises, it constructs a runtime tool named `mcp__<serverName>__<toolName>`: the config key, the advertised name, double underscores as separators. So the postgres server's `run_query` becomes `mcp__postgres__run_query`, and the toy server above would yield `mcp__ledger__lookup_version`. From that moment these are tools like any other: their descriptions and schemas are shown to the model, the model can propose calls to them, and, crucially for this project, the names participate in every control surface: an agent's fence lists them to grant them, permission rules can match them, and a hook matcher like `mcp__.*` catches all of them.
 
-A call, end to end: an agent proposes `mcp__postgres__run_query` with `{sql: "select ... from information_schema.columns ..."}`. The runtime checks the proposing agent's fence (is the name granted?), the permission lists, and PreToolUse hooks, then translates the proposal into a `tools/call` request to the postgres child process. The server executes it against the DATABASE_URL from its environment, applies its own policy (read-only refuses writes), and returns the result content, which the runtime hands back into the agent's context as the tool result. The server process lives for the duration of the session; the tools live exactly as long as the server that advertises them.
+A call, end to end works as follows. An agent proposes `mcp__postgres__run_query` with `{sql: "select ... from information_schema.columns ..."}`. The runtime checks the proposing agent's fence (is the name granted?), the permission lists, and PreToolUse hooks, then translates the proposal into a `tools/call` request to the postgres child process. The server executes it against the DATABASE_URL from its environment, applies its own policy (read-only refuses writes), and returns the result content, which the runtime hands back into the agent's context as the tool result. The server process lives for the duration of the session; the tools live exactly as long as the server that advertises them.
 
-Three consequences follow from this manufacture, and all three matter to the workflow writer. First, you do not choose the tool names: the server's author does, and the config key does. A fence grant like `mcp__postgres__run_query` is therefore a dependency on someone else's naming, and if the server renames its tool or you switch server implementations, the grant silently matches nothing, with no error at load time; hence the rule to re-probe fenced agents after any `.mcp.json` change. Second, tool descriptions are routing surfaces just like agent descriptions: the model decides when to use an MCP tool by reading the description the server advertised, so a badly described tool goes unused or misused, and when you write your own servers, the description rules from this tutorial apply verbatim. Third, every advertised tool's schema occupies context in every session that loads it, so a server that exposes forty tools taxes everyone for the three you need; prefer narrow servers, and treat "which servers do we load" as a design decision with the same budget discipline as everything else in CLAUDE.md.
+Three consequences follow from this manufacture, and all three matter to the workflow writer. First, you do not choose the tool names: the server's author does, and the config key does. A fence grant like `mcp__postgres__run_query` is therefore a dependency on someone else's naming, and if the server renames its tool or you switch server implementations, the grant silently matches nothing, with no error at load time; hence the rule to re-probe fenced agents after any `.mcp.json` change.
+
+Second, tool descriptions are routing surfaces just like agent descriptions: the model decides when to use an MCP tool by reading the description the server advertised, so a badly described tool goes unused or misused, and when you write your own servers, the description rules from this tutorial apply verbatim. Third, every advertised tool's schema occupies context in every session that loads it, so a server that exposes forty tools taxes everyone for the three you need; prefer narrow servers, and treat "which servers do we load" as a design decision with the same budget discipline as everything else in 
+`CLAUDE.md`.
 
 <a name="appendixL"></a>
 ## Appendix L: Automating the orchestrator as a Scala 3 driver program
@@ -1987,9 +2076,9 @@ What this preserves from the manual design, stated once because each is one line
 ---
 
 <a name="appendixM"></a>
-## Appendix M: the MCP servers and what they are for
+## Appendix M: using the MCP servers in this tutorial project
 
-Four of the ten agents carry tools whose names begin with `mcp__`. Those tools do not come from Claude Code; they come from separate server programs declared in `.mcp.json`, which [Phase 1](#phase-1-the-factory-builds-the-factory) creates as part of the constitution. This appendix explains why the project needs them at all, what each server does, which agent holds which tool and for what purpose, and why every one of them is configured read-only.
+Four of the ten agents carry tools whose names begin with `mcp__`. Recall that those tools come from separate server programs declared in `.mcp.json`, which [Phase 1](#phase-1-the-factory-builds-the-factory) creates as part of the constitution. This appendix explains why the project needs them at all, what each server does, which agent holds which tool and for what purpose, and why every one of them is configured read-only.
 
 ### Why MCP rather than just Bash
 
@@ -2064,7 +2153,7 @@ The configuration that produces them is shown below; this is the file the factor
 }
 ```
 
-`uvx` runs each server on demand, which is why it appears in the [Session 0](#3-prerequisites-and-session-0) toolchain check. A missing `uvx` does not break the build; it breaks exactly the agents whose procedures depend on inspection, and it breaks them at the moment they inspect.
+[`uvx` is a command that runs each server on demand](https://docs.astral.sh/uv/), which is why it appears in the toolchain check. A missing `uvx` does not break the build; it breaks exactly the agents whose procedures depend on inspection, and it breaks them at the moment they inspect.
 
 ### What each tool actually does in this project
 
@@ -2115,27 +2204,27 @@ Any change to `.mcp.json`, whether adding a server, renaming a key, or altering 
 <a name="appendixN"></a>
 ## Appendix N: fixing a semantic error in the business logic
 
-A semantic error is the defect class every gate in this tutorial is worst at catching: the code compiles, `sbt check` is green, the reviewer approved, and the behavior is wrong anyway, because the code faithfully implements a wrong rule. Worse, the test suite is usually complicit, since the tests were written against the same misunderstanding and pin the wrong behavior as if it were correct. That changes the repair path fundamentally. A crash has an oracle (the stack trace); a semantic error has none inside the system, because the only place the correct rule exists is in a human's head. The repair must therefore begin by manufacturing the missing oracle, and only then touching the code.
+A semantic error is the defect class every gate in this tutorial is worst at catching: the code compiles, `sbt check` is green, the reviewer approved, and the behavior is wrong anyway, because the code faithfully implements a wrong rule. Worse, the test suite is usually complicit, since the tests were written against the same misunderstanding and pin the wrong behavior as if it were correct. That changes the repair path fundamentally. A crash has an oracle and the stack trace; a semantic error has none inside the system, because the only place the correct rule exists is in a human's head. The repair must therefore begin by manufacturing the missing oracle, and only then touching the code.
 
 The running example for this appendix: TaskForge ships with the transition set containing (Done, Todo), so completed tasks can be reopened. Suppose the intended business rule was that Done is terminal, and a user reports that finished tasks keep coming back to life. The code is correct Scala, `TaskServiceSuite` asserts that Done to Todo succeeds, and everything is green. That is a semantic error in full: implementation, tests, and running system all agree with each other and all disagree with the intent.
 
-### N.1. Step zero: recognize this as a specification event, not a code event
+### Step zero: recognize this as a specification event, not a code event
 
 Before any agent is invoked, the human makes the one decision no agent can make: what the correct rule actually is. Is Done terminal, or is reopening legal? The agents can tell you what the code does, what the tests assert, and what the data contains; none of that answers the question, because the question is about intent. Write the decided rule down in one sentence, since that sentence becomes the work order, the test name, and eventually the specification patch. In the example: a task in Done may not transition to any other state; reopening requires creating a new task.
 
 Skipping this step is where semantic fixes go wrong. An agent asked to "fix the reopening bug" with no stated rule will infer a rule, and you are back where you started, with the misunderstanding relocated rather than removed.
 
-### N.2. The oracle first: a failing test, written by the test-engineer
+### The oracle first: a failing test, written by the test-engineer
 
-The first delegation goes to the test-engineer, not the implementer, and its job is to encode the correct rule as a test that currently fails. Fresh session, prompt in this form:
+The first delegation goes to the test-engineer, not the implementer, and its job is to encode the correct rule as a test that currently fails. In a fresh session, prompt in this form should be executed.
 
 > Use the test-engineer agent. A semantic defect is confirmed in the service tier: the transition set permits Done to Todo, but the intended business rule is that Done is terminal (no transitions out of Done; reopening is out of scope). Write the test that pins the intended rule: transitioning a Done task to any state must raise InvalidTransition. Identify every existing test that asserts the old, wrong behavior and list them in your report; you are authorized to change those specific assertions to the new rule, and you must list each one you changed. Do not touch src/main. Leave the new test failing and report it.
 
 Three things in that prompt are load-bearing. The intended rule is stated exactly once, in plain declarative form, because this sentence is the specification and everything downstream transcribes it. The authorization to edit existing tests is explicit, enumerable, and scoped, because a test that pins behavior is a small contract, and changing one is normally something the reviewer flags; the license lives in the task text, for this run only, exactly like the vacuous-inspect license in [Phase 4](#phase-4-schema-and-data-tier). And the fence holds: the test-engineer must not fix the code, per its law that the failing test stays failing, so the deliverable of this step is a red suite whose redness is the point.
 
-The result is the contradiction made visible: the new test asserts the intended rule, the old assertions are updated to match it, and the suite fails against current `src/main`. You now have what the system lacked, an executable statement of correct, produced by an agent that is physically unable to quietly satisfy it.
+The result is the contradiction made visible when the new test asserts the intended rule, the old assertions are updated to match it, and the suite fails against current `src/main`. We now have what the system lacked, an executable statement of correct, produced by an agent that is physically unable to quietly satisfy it.
 
-### N.3. The fix, by the owner of the code
+### The fix, by the owner of the code
 
 Second delegation, to the feature-implementer, with the report pasted forward:
 
@@ -2145,11 +2234,11 @@ This is where the Phase 5 insistence on rules as data pays its dividend. Because
 
 The prohibition on modifying tests in this second prompt is the mirror of the prohibition on modifying code in the first. Each side of the contradiction is resolved by exactly one owner, so the diff that reaches review tells a clean story: tests changed by the agent whose job is intent, code changed by the agent whose job is implementation, nothing changed by anyone else.
 
-### N.4. Review, with the semantic change as the headline
+### Review, with the semantic change as the headline
 
-Third delegation, to the code-reviewer, scoped to the diff since the last green commit. The reviewer cannot judge whether Done-is-terminal is the right business rule, and it does not need to. What it verifies is narrower and mechanical: the code change and the test changes tell the same story; no behavior outside the stated rule changed; the web tier still maps InvalidTransition to 409 and nothing started catching it elsewhere, per the CLAUDE.md rule that errors are mapped in exactly one place; and the tier boundaries survived. Then the ordinary gate, `sbt check` green, one commit whose message names the rule, in the form `fix(service): Done is terminal - remove (Done,Todo) transition`.
+Third delegation, to the code-reviewer, scoped to the diff since the last green commit. The reviewer cannot judge whether Done-is-terminal is the right business rule, and it does not need to. What it verifies is narrower and mechanical: the code change and the test changes tell the same story; no behavior outside the stated rule changed; the web tier still maps InvalidTransition to 409 and nothing started catching it elsewhere, per the `CLAUDE.md` rule that errors are mapped in exactly one place; and the tier boundaries survived. Then the ordinary gate, `sbt check` green, one commit whose message names the rule, in the form `fix(service): Done is terminal - remove (Done,Todo) transition`.
 
-### N.5. The two forks that make production semantic errors expensive
+### The two forks that make production semantic errors expensive
 
 If the error shipped, two questions follow, and they have different owners.
 
@@ -2157,11 +2246,11 @@ The first fork is the API contract. Requests that used to succeed with 200 now f
 
 The second fork is the data. Every task that was illegally reopened while the wrong rule was live is now a row whose history violates the current rules. Deciding what to do with those rows is not the implementer's call and not the responder's either, since its matrix row forbids data repair. If repair is wanted, the path runs through the db-migrator, which prepares the corrective migration plus the blast-radius analysis, and through you, because data repair is destructive-DDL-grade and ships only with written sign-off. Fixing the future (code) and repairing the past (data) are separate acts with separate owners and separate gates, and collapsing them into one hurried change is how a semantic bug becomes a data-loss incident.
 
-### N.6. Close the loop in the specification
+### Close the loop in the specification
 
-The last step is the one this tutorial keeps returning to: findings become specification. The Phase 5 prompt in this document and in `docs/genesis-prompts.md` states the transition set explicitly, so patch it there, removing (Done, Todo) and adding the sentence Done is terminal. If you skip this, the error is not fixed, it is dormant: the next regeneration of the project from the genesis script will faithfully reintroduce it, because the agents implement the words they are given, and the words still contain the bug. If the error traces back to an ambiguity rather than an outright mistake, repair the wording under the rules of [section 5](#5-choosing-and-combining-the-words-of-the-initial-prompt). And if the error represents a class rather than an instance, terminal states in general, add the class to the test-engineer's mission categories through the factory-engineer, with ratification, so every future suite probes for it unprompted.
+The last step is the one this tutorial keeps returning to, _findings become specification_. The Phase 5 prompt in this document and in `docs/genesis-prompts.md` states the transition set explicitly, so patch it there, removing (Done, Todo) and adding the sentence Done is terminal. If you skip this, the error is not fixed, it is dormant: the next regeneration of the project from the genesis script will faithfully reintroduce it, because the agents implement the words they are given, and the words still contain the bug. If the error traces back to an ambiguity rather than an outright mistake, repair the wording under the rules of [section 5](#5-choosing-and-combining-the-words-of-the-initial-prompt). And if the error represents a class rather than an instance, terminal states in general, add the class to the test-engineer's mission categories through the factory-engineer, with ratification, so every future suite probes for it unprompted.
 
-### N.7. What not to do, and which mechanism each shortcut breaks
+### What not to do, and which mechanism each shortcut breaks
 
 | Temptation | Why it is wrong | Mechanism it breaks |
 |---|---|---|
@@ -2172,23 +2261,18 @@ The last step is the one this tutorial keeps returning to: findings become speci
 | patch the running container or the database by hand | drift that no plan, migration history, or future agent can see | proposal and disposal |
 | fix the code but not the genesis prompt | the next regeneration reintroduces the bug verbatim | findings become specification |
 
-The summary sentence, if you keep only one: a semantic error is repaired specification-first, oracle-second, code-third, and the code edit is the smallest and least interesting of the three.
+A semantic error is repaired specification-first, oracle-second, code-third, and the code edit is the smallest and least interesting of the three.
 
-Here is the rewritten appendix, paste-ready, with the third column added to the P.1 table quoting the exact prompt words that carry each artifact. TOC line unchanged:
-
-```markdown
-- [Appendix P: where the requirements actually come from](#appendix-p-where-the-requirements-actually-come-from)
-```
 
 ---
 
 ## Appendix P: where the requirements actually come from
 
-A careful reader eventually notices something missing from this tutorial. There is no requirements document. Nobody writes user stories, nobody sketches the GUI, nobody sits down and states the business logic as business logic. Yet the finished system has definite behavior, a working browser interface, and rules that reject an empty title and refuse an illegal status transition. Software does not get behavior from nowhere, so this appendix answers the question directly: where did the direction come from, who supplied it, and through what channel?
+A careful reader eventually notices something missing from this tutorial - there is no requirements document! Nobody writes user stories, nobody sketches the GUI, nobody sits down and states the business logic as business logic. Yet the finished system has definite behavior, a working browser interface, and rules that reject an empty title and refuse an illegal status transition. Software does not get behavior from nowhere, so this appendix answers the question directly: where did the direction come from, who supplied it, and through what channel?
 
 The answer has three parts. The direction exists, but it is compressed into the work orders rather than gathered into a document. The compression works because the model expands it against a genre it already knows. And the expansion is made safe because every gap the model fills is converted back into an explicit, reviewable artifact before it can matter. Take these in order.
 
-### P.1. The specification exists; it is just not shaped like one
+### The specification exists; it is just not shaped like one
 
 Conventional projects carry four specification artifacts: a product description, a feature list or user stories, a data and rules specification, and interface mockups with acceptance criteria. None of those files exist in this repository, but every one of their jobs is done by specific sentences in the prompts. The third column quotes the exact words, so you can see both that the direction is real and how little text carries it.
 
@@ -2204,15 +2288,15 @@ Conventional projects carry four specification artifacts: a product description,
 
 Read the third column top to bottom and the pattern emerges. The human never wrote prose about what the software should do, but the human absolutely decided what the software should do, in the places where deciding matters: the data shapes, the invariants, the legal transitions, the exact status code of every error. Notice also the register those words are in. The business rules are a set of pairs, the bounds are numbers, the API contract is a route-to-code mapping; the direction is given as data and constraints, not as narrative. What the human never supplied is everything between those decisions, the layout of the page, the wording of buttons, the order of form fields, the hundreds of small choices a GUI and a codebase are made of. Those came from somewhere else.
 
-### P.2. The genre is the missing requirements document
+### The genre is the missing requirements document
 
 The phrase task manager is not a description; it is a genre selection. The model has absorbed thousands of task boards, todo applications, and CRUD interfaces, and that mass of training data functions as a prior over what such applications contain: a list of items, a text field to add one, a way to filter, a control to advance status, a delete affordance, error messages surfaced near the action. When Phase 6 says task board and then spends only 11 words on features, create, filter by status, advance status, delete, surface JSON error bodies, it is not under-specifying; it is pointing at a distribution and asking for a typical member of it.
 
-This is why the direction can be so short here and would be short nowhere else. In conventional development the specification must be explicit in proportion to how much the builder cannot be assumed to know. A human contractor also does not need a wireframe to build a todo list, and for the same reason: the genre carries the requirements. What is new in the agentic setting is only the degree, because the model's prior is broader and cheaper to invoke than any contractor's experience. The two words task management in Phase 1 do more specification work than any other two words in this tutorial.
+This is why the direction can be so short here. In conventional development the specification must be explicit in proportion to how much the builder cannot be assumed to know. A human contractor also does not need a wireframe to build a todo list, and for the same reason, since the genre carries the requirements. What is new in the agentic setting is only the degree, because the model's prior is broader and cheaper to invoke than any contractor's experience. The two words task management in Phase 1 do more specification work than any other two words in this tutorial.
 
-The economics follow immediately. Writing a GUI specification is recall: you must produce, from nothing, every decision in advance. Judging a rendered GUI is recognition: you look at the page the genre produced and say yes, or no, or change this. Recognition is drastically cheaper than recall for in-distribution artifacts, and this tutorial's whole stance on requirements is to spend human effort on recognition wherever the genre permits it.
+The economics follow immediately. Writing a GUI specification is recall where you must produce, from nothing, every decision in advance. Judging a rendered GUI is recognition: you look at the page the genre produced and say yes, or no, or change this. Recognition is drastically cheaper than recall for in-distribution artifacts, and this tutorial's whole stance on requirements is to spend human effort on recognition wherever the genre permits it.
 
-### P.3. The three converters: how implicit direction becomes explicit contract
+### The three converters: how implicit direction becomes explicit contract
 
 Letting a model fill gaps is only safe if the filled gaps become visible before they become load-bearing. The tutorial does this with three converters, each of which turns a silent completion into an explicit artifact a human disposes of.
 
@@ -2220,22 +2304,142 @@ The first converter is the verbatim report. Phase 5 does not merely tell the imp
 
 The second converter is the pinned test. The moment a filled-in behavior exists, a suite freezes it: JsonCodecSuite freezes the wire format down to the clause enum encodes as bare string "InProgress", and TaskRoutesSuite freezes the status code of every error path per the acceptance row in the table above. From that commit on, the gap-filling is no longer a model disposition that could drift on the next run; it is a contract that fails loudly when touched, and the reviewer treats edits to those tests as major findings. The genre proposed; the test disposed.
 
-The third converter is the browser gate at Step 6.3, and it deserves to be recognized for what it is: the GUI requirements review, held after the GUI exists. You never told the system what the page should look like, so the gate is where you look at what the genre produced and either ratify it by committing or direct changes in plain sentences, move the filter, label the button Done. Direction about the interface is given retroactively, at the moment it is cheapest to give, against a concrete rendering instead of an imagined one. The same holds for behavior: if using the page reveals that a filled-in rule is wrong, that is a semantic finding, and [Appendix N](#appendix-n-fixing-a-semantic-error-in-the-business-logic) is its repair path, beginning with the human stating the intended rule in one sentence.
+The third converter is the browser gate at Step 6.3, the GUI requirements review, held after the GUI exists. You never told the system what the page should look like, so the gate is where you look at what the genre produced and either ratify it by committing or direct changes in plain sentences, move the filter, label the button Done. Direction about the interface is given retroactively, at the moment it is cheapest to give, against a concrete rendering instead of an imagined one. The same holds for behavior: if using the page reveals that a filled-in rule is wrong, that is a semantic finding, and [Appendix N](#appendix-n-fixing-a-semantic-error-in-the-business-logic) is its repair path, beginning with the human stating the intended rule in one sentence.
 
-### P.4. One behavior traced end to end
+### One behavior traced end to end
 
 Follow the advance-status button, since no sentence in this tutorial ever asked for a button. The chain: Phase 1 says task-management web app, selecting the genre. Phase 3 gives status a type, with Todo, InProgress, Done. Phase 5 gives it rules, the human-authored pairs Todo to InProgress, InProgress to Done, Done to Todo, InProgress to Todo, which is the only place the actual business logic was ever written down, and it was written as data by you. Phase 6 spends two words, advance status, and the model's genre prior expands them into a control on each task card, wired to PATCH /api/tasks/id, with the 409 from an illegal transition surfaced in the page. Step 6.3 is where a human first sees the button and clicks it, ratifying the expansion. TaskRoutesSuite pins 409 illegal transition so the behavior can never drift silently.
 
 Audit the chain for authorship and the division of labor is exact: the human wrote the rules and the type, the model wrote everything visible, and every model contribution passed through one of the three converters before it counted. That is the tutorial's answer to no direction from the human: the human directed the invariants and disposed of the completions, and nothing else needed directing.
 
-### P.5. The limits, stated plainly
+### The limits, stated plainly
 
 This scheme has a boundary, and it is the distribution. TaskForge sits dead center in the most heavily represented genre in the training data, which is why 11 words could specify a frontend. The further your application sits from convention, the more the prior fills gaps with plausible-but-wrong material, and the more dangerous the scheme becomes, because the second converter then pins wrong guesses with confident tests, manufacturing semantic errors at scale. The working rule: the amount of explicit human direction required is inversely proportional to how conventional the desired behavior is. A pricing engine, a compliance workflow, a scheduling constraint solver, anything where your rules differ from the obvious ones, must have those rules written by the human as data in the prompt, exactly as the transition set was, because that is precisely where the genre would guess wrong.
 
 Two countermeasures from elsewhere in this tutorial generalize here. The build-engineer's practice of marking deliberate absences, the comment saying circe is deliberately not here, has a requirements twin: state the conventions you do not want, since the prior will otherwise supply them silently, pagination you did not ask for, a sort order you never chose. And the report contract is your instrument for surfacing the rest: any prompt that leaves room for genre completion should end the way Phase 5 and Phase 6 do, report the transition set verbatim, report the route table and each error's status code, because you can only ratify what you can see.
 
-### P.6. The protocol, compressed
+### The protocol, compressed
 
 For your own application, the requirements method of this tutorial is five sentences. Write the data model and the invariants yourself, as types, bounds, and rule sets, in the register of the third column above, never as prose features. Select the genre with the fewest words that pick it out, and name the deviations from convention explicitly, including the conventions you refuse. Demand every filled-in decision back as verbatim data in reports. Pin every accepted behavior with a test the moment it exists. Hold the interface review in a browser against the real page, and route what you see through the same owners and gates as every other change.
 
 What this replaces is not specification; it is anticipation. The direction the human gives is exactly as binding as in any process, but it is given where recognition can substitute for recall, and the system is built so that nothing the model assumed on your behalf can reach production without having been shown to you first.
+
+---
+
+## Appendix Q: injecting your own functionality, the work-order patterns
+
+[Appendix P](#appendix-p-where-the-requirements-actually-come-from) explained where requirements come from when your application is conventional: the genre prior fills the gaps and three converters make the filling reviewable. This appendix is the instruction set for the other case, the functionality that is specifically yours, business rules the genre cannot guess, a GUI with real structure, data representations you chose for a reason, algorithms that must be exactly one procedure and not the obvious one. It gives the rules for where such content enters the system, the register to write it in, and worked prompt templates for each category.
+
+### The two injection points, and the one place that is forbidden
+
+Everything specific to your domain enters through exactly two channels. Durable structure enters through the constitution, meaning the Phase 1 matrix serialization: tier boundaries, package names, artifact ownership, and any architectural invariant that must outlive every feature. Functional payload enters through work orders, the per-phase and per-feature prompts, and through nothing else. In steady state you author that payload in plan mode in the main session, and the plan distributes it to owners: schema clauses to the db-migrator, rules and structures to the feature-implementer, the same specification pasted again to the test-engineer.
+
+The forbidden third place is agent files. It is tempting to write a business rule into the feature-implementer's body so it is never forgotten, and it is always wrong: channel discipline makes role files timeless, a feature is not timeless, and a rule buried in an agent body becomes invisible policy that survives the feature it belonged to. Agent files carry discipline, prompts carry specification, the constitution carries structure. If you remember one sentence from this appendix, that is the one.
+
+### The register ladder
+
+A specification register is the form your payload takes inside the prompt. The ladder below runs from weakest to strongest, and the governing rule extends Appendix P's inverse-proportionality: climb in proportion to how far the desired behavior is from what the genre would guess, because everything below your chosen rung gets filled in by the model's prior, and for unconventional functionality the prior fills wrong.
+
+| Rung | Register | Example fragment | Binds |
+|---|---|---|---|
+| 1 | adjectives | a flexible pricing system | nothing |
+| 2 | prose description | discounts grow with seat count and tier | a mood |
+| 3 | named term of art | token bucket, refill rate r, burst b | a known procedure |
+| 4 | structured data | the rule table in Q.3 | the rules themselves |
+| 5 | numbered pseudocode | the algorithm in Q.6 | the procedure step by step |
+| 6 | input-output pairs | the golden pairs in Q.6 | exact observable behavior |
+| 7 | executable test | a failing test, as in [Appendix N](#appendix-n-fixing-a-semantic-error-in-the-business-logic) | everything, mechanically |
+
+Rungs 1 and 2 are acceptable only where Appendix P applies, meaning the genre already knows the answer. Everything proprietary starts at rung 4.
+
+### Adding business logic: the worked sequence
+
+The running example: TaskForge gains seat-based pricing with tier discounts, a rule set no prior can guess because it is a business decision. The sequence is the feature loop from [section 11](#11-after-genesis-the-operating-loops) with the payload written at rung 4.
+
+Step 1. Author the rules as data, in plan mode, before any delegation. Write the actual table, decide the resolution policy (what happens when rows overlap, what happens when nothing matches), and decide the failure semantics. These three decisions are the specification; everything else is transcription.
+
+Step 2. If the feature needs new domain types, a Phase 3 style delegation adds them at the signature rung, for example `PriceQuote(tier, seats, discountPct, total) derives ReadWriter`, with the codec test extended in the same change.
+
+Step 3. The implementer delegation, carrying the table verbatim can be specified as follows.
+
+```
+Use the feature-implementer agent to build pricing in service/PricingService.scala,
+depending only on the domain. Encode this table as data, a List of
+Rule(tier, minSeats, maxSeats, discountPct), evaluated top-down, first match wins;
+do not unroll it into if-trees:
+
+  Enterprise,  50, 999999, 20
+  Enterprise,  10,     49, 12
+  Team,        10, 999999, 10
+  Team,         2,      9,  4
+  Solo,         1,      1,  0
+
+Seats below 1 or a tier-seat combination matching no row raises ValidationFailed.
+Run sbt check; report the encoded table verbatim and one worked example per row.
+```
+
+Note what each clause does. Encode as data plus the anti-pattern name (no if-trees) fixes the shape, so the semantic content stays diffable. Evaluated top-down, first match wins states the resolution policy explicitly, because resolution is exactly where the prior substitutes a convention silently. The unmatched case is specified, not left to taste. And the report demand, table verbatim plus one worked example per row, is your converter: you diff the echoed table against Step 1 by eye, and the worked examples prove the agent can execute its own encoding.
+
+Step 4. The adversarial delegation, with the same table pasted again as specified below.
+
+```
+Use the test-engineer agent on PricingService. The specification table: [PASTE THE
+TABLE FROM STEP 3]. The implementer's report: [PASTE IT]. Test against the table,
+not against the implementation: boundary seats at every min and max, the gaps if
+any, overlapping-row precedence, seats 0 and negative, unknown tier. Leave any
+failing test failing and report it.
+```
+
+The sentence test against the table, not against the implementation is the whole point of pasting the specification twice. Without it the tester reverse-engineers expectations from the code and certifies whatever was built.
+
+Step 5. Review, gate, commit as in any feature: code-reviewer on the diff, `sbt check` green, one commit naming the feature. Then the close: the table goes into your specification record (the plan file or the genesis prompts if this becomes a permanent fixture), so a future regeneration cannot lose it. Findings become specification applies to features exactly as it applies to failures.
+
+### Adding complex GUI structure
+
+The genre prior carried TaskForge's board with 11 words; it will not carry a three-panel workflow. The register for interfaces is structure-as-outline plus interaction-as-state-machine, leaving only the visual layer to the prior. Specify four things per screen, and specify them by name as shown below.
+
+```
+Use the feature-implementer agent to extend static/index.html with a pricing panel.
+Structure: a region #pricing-panel to the right of the board, containing
+#tier-select (the three tiers), #seat-input (integer, min 1), and #quote-display.
+Data binding: #quote-display renders GET /api/price?tier=&seats= and re-fetches on
+any change to the two inputs. States for #quote-display: empty (no valid input yet),
+loading, error (render the JSON error body), and quoted (discount and total).
+Transitions: empty to loading on first valid input; loading to quoted on 200;
+loading to error on 4xx; any state back to loading on input change.
+Do not restyle the existing board. Run sbt check; report the id list and the state
+transition pairs verbatim.
+```
+
+The instruction discipline here: ids, not descriptions, because `#quote-display` is an address that tests, later work orders, and your browser-gate feedback can all reference, while the quote area is a gesture. States and transitions as pairs, the same from-to register as the status transitions, because interaction logic is business logic and gets the same data treatment. A named prohibition (do not restyle the existing board) wherever the prior's helpfulness has room to redecorate. The converter for GUI work is the browser gate: open the page, drive every transition you specified, and treat a state you cannot reach as a failed phase even if the build is green. When a frontend outgrows one file, stop stretching the prompt and change the matrix instead: a new agent owning `static/**`, created by the factory-engineer, ratified like any constitutional change.
+
+### Adding data structures
+
+Data structures inject at two points in two registers. In-memory shapes go into implementer prompts at the signature rung, written out field by field, because names and types are pure decisions with no convention behind them. Persistent shapes go into db-migrator prompts at DDL granularity, each column typed and each index carrying its reason in a trailing parenthetical, the [Phase 4](#phase-4-schema-and-data-tier) pattern: an index on status (the list endpoint filters by it) survives future review; an unexplained index is the first thing a later migration drops.
+
+For a structure with an invariant, add two clauses to the implementer prompt. First, the representation decision with its one-sentence rationale, so the agent implements your choice rather than electing its own: store the audit trail as an append-only event list with periodic snapshots (reads replay at most 100 events). Second, the invariant as a property with the demand that it become a property-based test: for all event sequences, replay(snapshot ++ tail) equals replay(full); report the generator you used. Then reuse the comprehension check that closed Phase 4: ask in the prompt where the representation could drift from the schema or violate the invariant, and what catches it. An agent that cannot answer did not understand what it built, and the phase fails on that ground alone.
+
+### Adding algorithms
+
+Algorithms are where the prior is most dangerous, because it always knows an algorithm, the obvious one, and supplies it confidently where you needed a specific one. Four registers, in escalating order of control, composable in one prompt.
+
+Name it, when a published algorithm is what you want. Dijkstra over the dependency graph with a binary heap, token bucket with refill rate r and burst b, expand and contract for the migration. A precise name selects a precise procedure from the training distribution, the same mechanism that makes least privilege work as a phrase.
+
+Write it as numbered pseudocode, when the algorithm is yours. At this rung the delegation becomes transcription rather than generation, the same relationship the factory has to the matrix, and transcription is what you want for anything proprietary is as follows.
+
+```
+Implement assignReviewers exactly as specified:
+  1. candidates = active users minus the task's author
+  2. sort candidates by (openReviewCount ascending, lastAssignedAt ascending)
+  3. take the first two; if fewer than two exist, raise ValidationFailed("no reviewers")
+  4. record lastAssignedAt = now for those chosen, in the same transaction
+Do not substitute round-robin or random assignment.
+```
+
+The final sentence names the two substitutions the prior would otherwise make; prohibitions work when they name the exact tempting alternative.
+
+Bind the behavior with properties and golden pairs. Properties state what must hold for all inputs and become property tests: output always sorted, assignment idempotent within a transaction, no author ever assigned to their own task. Golden pairs are concrete inputs with required outputs, pasted with the instruction that each becomes a named test case verbatim; they are the strongest specification short of the tests themselves, because numbers do not reword under paraphrase. Close with the comprehension check in the report contract: state the worst case and the input that triggers it.
+
+### The checklist
+
+Before sending any functionality-bearing work order, walk this list. The payload is in a prompt or the constitution, never in an agent file. The register matches the novelty: rung 4 or higher for anything the genre cannot guess. Resolution policy and failure semantics are stated, not implied. Every named thing that later prompts or tests must reference has an id or a name in the prompt. The prompt names the specific alternatives it prohibits. The report demand echoes the specification back as data. The adversarial pass receives the specification itself, pasted, with the instruction to test against it rather than against the implementation. And after the gate, the specification lands in your permanent record, so the functionality survives not just in the code but in the words that can regenerate it.
