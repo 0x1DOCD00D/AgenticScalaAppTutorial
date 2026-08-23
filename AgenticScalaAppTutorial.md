@@ -28,6 +28,10 @@ This design is based on two asymmetries. First, breadth versus narrowness where 
 
 Three components governs the agentic workflow, given that it has no fence file. The orchestrator is bound by the same constitution as the agents: CLAUDE.md loads into its context at session start, and the hard rule about one owner per artifact class applies to it by name. This rule exists because the orchestrator is the one context that holds broad tools, so nothing physical stops it from writing the code or editing the build itself instead of delegating. If it did, the work would bypass every gate that makes the agents accountable, and the system would gain a hidden eleventh owner that no matrix row describes. The floor applies to it fully; hooks and permission rules do not distinguish orchestrator from subagent tool calls. And the *authority matrix* gives it a row of its own: it may plan, decompose, delegate, paste reports, and run the repair loop; it must never perform a specialty inline or bypass an owner; it escalates routing ambiguities and matrix gaps to you.
 
+A _hook_ is a shell command that Claude Code itself runs at a fixed moment in an agent's lifecycle, registered in `.claude/settings.json` under the name of that moment: PreToolUse fires before a proposed tool call executes, PostToolUse fires after one completes, and Stop fires when the agent tries to end its turn. Each registration pairs the event with a matcher that selects which tool calls it applies to (the guard matches Bash, the formatter matches Edit and Write) and with the command to run, typically a small script in `.claude/hooks/`. The model does not call a hook, cannot see its code, and cannot decline it, it is the harness that invokes it as an ordinary subprocess, which is why a hook belongs to the deterministic floor while an instruction does not. A sentence in an agent file is read by the model and weighed; a hook is executed by the runtime and simply happens, every time, on 100% of matching events.
+
+At runtime when a matching event occurs, Claude Code pauses the agent, starts the hook process, and writes a JSON description of the event to its stdin: the tool name, the full tool input (for the guard, the exact command string about to run), and bookkeeping fields such as `stop_hook_active`. The hook does whatever inspection it wants and answers through its exit code. Exit 0 means proceed, and the paused action goes ahead. Exit 2 means block: the tool call is cancelled (or the stop is refused), and whatever the hook printed to stderr is inserted into the agent's context as feedback, which is why a well-written guard prints an instruction such as a human must run this manually rather than a bare refusal, and why a blocked agent visibly changes course instead of retrying. Any other exit code is treated as a non-blocking error, surfaced to the user but not allowed to derail the agent, which is the contract that lets the formatter fail harmlessly. Hooks run with your operating-system permissions and a timeout, their configuration is read at session start, and nothing at runtime re-reads it, so a change to `settings.json` or a hook script is inert until the session restarts, exactly like every other constitutional change in this project.
+
 The orchestrator is a role, not a persistent entity - each new session (and the tutorial's convention is one phase per session) births a fresh orchestrator, re-anchored by CLAUDE.md, with no memory of previous sessions except what the repository and your prompts carry. And it is the same base model as every agent it delegates to; the difference between the orchestrator and, say, the feature-implementer is not intelligence or identity but constraint: one is the model with the whole conversation and no role file, the other is the same model with a fresh context, a system prompt, and a fence.
 
 ### Ownership matrix and the agentic workflow
@@ -1011,7 +1015,7 @@ Expect a refusal that names build-engineer. The cause is feature-implementer law
 
 ## Phase 2: build-engineer creates build.sbt and the project skeleton
 
-Goal: the complete build substrate, created from scratch by its owning agent: `build.sbt`, `project/build.properties`, `project/plugins.sbt`, `.scalafmt.conf`, `.gitignore`, `docker-compose.yml`. After this phase, `sbt check` exists and is the definition of done that every later phase's agents run.
+_Goal_: the complete build substrate, created from scratch by its owning agent: `build.sbt`, `project/build.properties`, `project/plugins.sbt`, `.scalafmt.conf`, `.gitignore`, `docker-compose.yml`. After this phase, `sbt check` exists and is the definition of done that every later phase's agents run.
 
 Step 2.1. Fresh session. Give this prompt, verbatim.
 
@@ -1032,9 +1036,9 @@ Step 2.2. What happens, tool call by tool call, and which instruction causes eac
 | the agent's report lists the environment-input surface as exactly APP_VERSION and CI | iron law 4 plus report requirement 4; determinism is a checked deliverable |
 | the agent finishes without being bounced by the Stop hook | no .scala files changed, so the hook's git diff test passes |
 
-Note what your prompt never said: run the compile before finishing, use named vals, do not add circe. Those sentences live in the agent file and the constitution, which is the entire reason Phase 1 came before Phase 2. The prompt carries the specification of this job; the file carries the discipline of every job.
+Note what this prompt never said: run the compile before finishing, use named vals, do not add circe. Those sentences live in the agent file and the constitution, which is the entire reason Phase 1 came before Phase 2. The prompt carries the specification of this job; the file carries the discipline of every job.
 
-Step 2.3. Your gate. Read build.sbt in full once (it defines "done" for every later phase, so it gets more attention than ordinary code). Confirm:
+Step 2.3. Your gate. Read build.sbt in full once. Confirm by executing the following commands.
 
 ```bash
 sbt check      # trivially green: nothing to test yet
@@ -1045,13 +1049,13 @@ Step 2.4. Failure branch. If a chosen version does not resolve, paste the exact 
 
 ### Phase 3: the domain and the wire format
 
-Goal: the shared kernel every tier depends on: `domain/Task.scala` (entity, status enum, request payloads, typed errors, upickle codecs), `config/AppConfig.scala`, and `JsonCodecSuite`, which freezes the JSON wire format before anything depends on it.
+_Goal_: the shared kernel every tier depends on: `domain/Task.scala` (entity, status enum, request payloads, typed errors, upickle codecs), `config/AppConfig.scala`, and `JsonCodecSuite`, which freezes the JSON wire format before anything depends on it.
 
 Step 3.1. Fresh session. Enter the following prompt, verbatim.
 
 > Use the feature-implementer agent to create the TaskForge domain in com.taskforge.domain, one file: a top-level `given ReadWriter[java.time.Instant]` via ISO-8601 strings (readwriter[String].bimap) placed above the case classes so derivation finds it; `enum TaskStatus derives ReadWriter` with Todo, InProgress, Done; `final case class Task(id: Long, title, description, status, createdAt, updatedAt) derives ReadWriter`; `CreateTaskRequest(title, description = "")` and `UpdateTaskRequest` with all-Option fields defaulted None (absent JSON keys must parse); `ErrorResponse(error)`; and a `sealed abstract class AppError(message) extends Exception with NoStackTrace` with TaskNotFound(id), ValidationFailed(reason), InvalidTransition(from, to). Also com.taskforge.config.AppConfig: env-var config (HTTP_HOST/PORT, DB_URL/USER/PASSWORD/POOL_SIZE) with local defaults, no config library. Then a JsonCodecSuite (plain munit) that pins: Task round-trip; enum encodes as bare string "InProgress"; Instant as ISO-8601; CreateTaskRequest parses without description; UpdateTaskRequest parses from {}; unknown enum value fails. Run `sbt check`; report the exact JSON of one sample Task.
 
-Step 3.2. What happens, and why
+Step 3.2. What happens in this phase
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -1074,7 +1078,7 @@ Step 4.1. Fresh session. The migration first, addressed to its owner as specifie
 
 > Use the db-migrator agent to create V1 for TaskForge: a tasks table with id BIGSERIAL PK; title VARCHAR(200) NOT NULL; description TEXT NOT NULL DEFAULT ''; status VARCHAR(20) NOT NULL DEFAULT 'Todo' CHECK (status IN ('Todo','InProgress','Done')); created_at and updated_at TIMESTAMPTZ NOT NULL DEFAULT now(); an index on status (the list endpoint filters by it). Header comment: applied migrations are never edited. There is no live database yet, so your inspect step is vacuous this once; say so in your report. Verify by `docker compose up -d db` and confirming Flyway applies it, then report the compatibility analysis (trivial for V1) and rollback strategy.
 
-Why the prompt licenses a skipped step explicitly: the migrator's procedure step 1 is "inspect the current schema through the postgres MCP server; never assume". Against an empty world that step cannot run. A well-built agent states a skipped step rather than silently skipping, and the license lives in the prompt (one run) rather than in the agent file (forever), so skipping never becomes normal.
+Why the prompt licenses a skipped step explicitly: the migrator's procedure step 1 is "inspect the current schema through the postgres MCP server; never assume". Against an empty world that step cannot run. A well-built agent states a skipped step rather than silently skipping.
 
 Step 4.2. The data tier, built by the feature-implementer against the schema from 4.1.
 
@@ -1082,11 +1086,11 @@ Step 4.2. The data tier, built by the feature-implementer against the schema fro
 
 ![img_2.png](docs/img_2.png)
 
-Step 4.3. What happens, and why. The drift question in the prompt is a comprehension check: the correct report answer is that `.query[Task]` maps columns to fields by position, so the compiler and the first test catch a reordered column list. An agent that cannot name that tripwire did not understand the code it just wrote, and you should treat the phase as failed even if the build is green. The guard hook is also relevant in this phase: if any agent ever proposed running a DROP TABLE against the compose database, the PreToolUse hook would block it regardless of intent.
+Step 4.3. What happens is the drift question in the prompt works a comprehension check. The correct report answer is that `.query[Task]` maps columns to fields by position, so the compiler and the first test catch a reordered column list. An agent that cannot name that tripwire did not understand the code it just wrote, and you should treat the phase as failed even if the build is green. The guard hook is also relevant in this phase - if any agent ever proposed running a DROP TABLE against the compose database, the PreToolUse hook would block it regardless of intent.
 
-This response is the machinery working, not misbehaving: the implementer hit two things it is forbidden to fix itself, contained both (a stable stub with the fix documented; a clean file that will only violate later), and routed the decisions to you. Both decisions are yours as principal, and here is how I would dispose of each, with the exact prompts.
+This response is the machinery working, since the implementer hit two things it is forbidden to fix itself, contained both (a stable stub with the fix documented; a clean file that will only violate later), and routed the decisions to the human architect.
 
-Decision 1: accept, with one refinement, and route to build-engineer. The agent's analysis is right: `Database.migrate` calls the Flyway API from the data tier, so `flyway-core` must be on the compile classpath; Runtime scope was the wrong home for it. The refinement: only move `flyway-core`. Keep `flyway-database-postgresql` at Runtime, because nothing ever compiles against it; Flyway discovers it reflectively at boot, so it is a true runtime-only artifact and the "no tier can write code against them" comment stays honest for it. Send the following prompt to `claude`.
+_Decision 1_: accept, with one refinement, and route to build-engineer. The agent's analysis is right: `Database.migrate` calls the Flyway API from the data tier, so `flyway-core` must be on the compile classpath; Runtime scope was the wrong home for it. The refinement is to only move `flyway-core`. Keep `flyway-database-postgresql` at Runtime, because nothing ever compiles against it; Flyway discovers it reflectively at boot, so it is a true runtime-only artifact and the "no tier can write code against them" comment stays honest for it. Send the following prompt to `claude`.
 
 > Use the build-engineer agent to apply a dependency-scope change requested by the feature-implementer: move flyway-core from Runtime scope into the data-tier compile dependencies; keep flyway-database-postgresql at Runtime (nothing compiles against it; Flyway loads it reflectively at boot). Justification: boot-time migration is a data-tier responsibility and Database.migrate uses the Flyway API at compile time. Update the scope comment so it stays true. Run sbt Test/compile and report the diff. The implementer's report: [paste item 1 verbatim].
 
@@ -1094,17 +1098,17 @@ Then close the loop with the blocked agent, fresh prompt.
 
 > Use the feature-implementer agent to finish data/Database.scala: replace the MigrationsUnavailable stub with the real Flyway body (it is in the scaladoc you left), keep the existing signature, run sbt check, and report.
 
-One gate note: do not commit Phase 4b with the stub in place. The stub was the right containment for an in-flight block, but a committed `migrate` that raises would pass compile and fail at boot, which is exactly the class of defect the phase gates exist to stop. Land the build fix and the real body first, then commit once.
+One gate note - do not commit Phase 4b with the stub in place. The stub was the right containment for an in-flight block, but a committed `migrate` that raises would pass compile and fail at boot, which is exactly the class of defect the phase gates exist to stop. Land the build fix and the real body first, then commit once.
 
-Decision 2: this one is genuine drift, and the rule for drift is that code and constitution must not be left disagreeing; either code follows constitution or the constitution is amended, never silence. Accept the agent's suggestion, since the generated CLAUDE.md says the business tier depends on traits it defines, so move the port out of the data package now, while it is one line.
+_Decision 2_: this one is genuine drift, and the rule for drift is that code and constitution must not be left disagreeing; either code follows constitution or the constitution is amended, never silence. Accept the agent's suggestion, since the generated CLAUDE.md says the business tier depends on traits it defines, so move the port out of the data package now, while it is one line.
 
 > Use the feature-implementer agent to move TaskRepository from com.taskforge.data to com.taskforge.domain, per CLAUDE.md's rule that the business tier must not depend on the data tier: update the package declaration and the import in DoobieTaskRepository, run sbt check, and report.
 
-A tradeoff is to decide whether the trait's methods return IO, so placing it in domain makes your shared kernel depend on cats-effect. If you want domain to stay effect-free, the alternative home is a package on the service side (for example com.taskforge.service.ports), which satisfies the same constitutional sentence. Either is fine; pick one and say it in the prompt. The expensive disposal, only worth it if you actually prefer the reference design (service may depend on a port trait that lives in data), is a constitutional amendment: route a CLAUDE.md wording change through the factory-engineer and ratify with commit plus restart. 
+A tradeoff is to decide whether the trait's methods return IO, so placing it in domain makes your shared kernel depend on cats-effect. If you want domain to stay effect-free, the alternative home is a package on the service side, for example, com.taskforge.service.ports, which satisfies the same constitutional sentence. Either is fine; pick one and say it in the prompt. The expensive disposal, only worth it if you actually prefer the reference design where service may depend on a port trait that lives in data, is a constitutional amendment: route a CLAUDE.md wording change through the factory-engineer and ratify with commit plus restart. 
 
-Last, run the evolution habit, because item 1 has a root cause upstream of both agents: the Phase 2 work order. The genesis prompt says "Flyway (core plus postgres module, Runtime)", and your build-engineer read the scope as applying to both artifacts, which is a perfectly reasonable parse of an ambiguous sentence. The fix belongs in the spec, so the next genesis is immune: change that clause in docs/genesis-prompts.md to "flyway-core (compile scope: the data tier calls its API at boot) plus flyway-database-postgresql (Runtime: loaded reflectively)". If you want the immunity in the standing layer too, one caution line added to build-engineer's file (via factory-engineer, ratified) does it: "a migration runner whose API is invoked from code needs compile scope in the invoking tier; only reflectively-loaded modules go Runtime". Findings become spec; every genesis failure should leave the factory smarter, and this one improves a prompt, an agent, and your build in a single pass.
+The genesis prompt says "Flyway (core plus postgres module, Runtime)", and your build-engineer read the scope as applying to both artifacts, which is a perfectly reasonable parse of an ambiguous sentence. The fix belongs in the spec, so the next genesis is immune: change that clause in docs/genesis-prompts.md to "flyway-core (compile scope: the data tier calls its API at boot) plus flyway-database-postgresql (Runtime: loaded reflectively)". If you want the immunity in the standing layer too, one caution line added to build-engineer's file (via factory-engineer, ratified) does it: "a migration runner whose API is invoked from code needs compile scope in the invoking tier; only reflectively-loaded modules go Runtime". Findings become spec; every genesis failure should leave the factory smarter, and this one improves a prompt, an agent, and your build in a single pass.
 
-Step 4.4. Gates and commits, one per sub-step:
+Step 4.4. Gates and commits, one per sub-step are executed.
 
 ```bash
 sbt check
@@ -1113,11 +1117,11 @@ git add -A && git commit -m "genesis 4a: schema V1 by db-migrator"
 git add -A && git commit -m "genesis 4b: data tier by feature-implementer"
 ```
 
-Step 4.5. Failure branch, a real one. Library APIs move; a doobie release relocated its java.time instances, and an import that trains well (`doobie.implicits.javasql`) no longer compiles. The compile error is the system working. Paste the compiler error back to the implementer; if it flails because its API knowledge is stale, the lookup escalates (the dependency-updater has the research tools) and the confirmed fix comes back as one edit. Afterward, one sentence gets added to the dependency-updater's cautions ("doobie RC bumps can change implicit imports; recompile is the test"), which is how every genesis failure leaves the factory smarter.
+Step 4.5. Failure branch, a real one. Library APIs move; a doobie release relocated its java.time instances, and an import that trains well (`doobie.implicits.javasql`) no longer compiles. The compile error is the system working. Paste the compiler error back to the implementer; if it flails because its API knowledge is stale, the lookup escalates as the dependency-updater has the research tools and the confirmed fix comes back as one edit. Afterward, one sentence gets added to the dependency-updater's cautions as "doobie RC bumps can change implicit imports; recompile is the test", which is how every genesis failure leaves the factory smarter.
 
 ### Phase 5: service tier and adversarial tests
 
-Goal: `TaskService` with the business rules encoded as data, an in-memory repository for tests, the service suite, and then a second agent whose whole job is to attack what the first one built.
+_Goal_: `TaskService` with the business rules encoded as data, an in-memory repository for tests, the service suite, and then a second agent whose whole job is to attack what the first one built.
 
 Step 5.1. Fresh session. The implementer runs first using the following prompt.
 
@@ -1127,7 +1131,7 @@ Step 5.2. Then the adversary, with the report pasted forward that comes from the
 
 > Use the test-engineer agent on the service tier. The implementer's report: [PASTE THE FULL 5.1 REPORT HERE]. Enumerate what it missed per your mission categories; add the tests; leave any failing test failing and report it.
 
-Step 5.3. What happens, and why:
+Step 5.3. What happens as a result of this prompt execution.
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -1136,7 +1140,7 @@ Step 5.3. What happens, and why:
 | the Stop hook lets the tester finish despite red | the hook checks that tests ran, not that they passed; passing is the next agent's job to restore |
 | the report gives exact pass/fail counts | its evidence rule: never summarize output you did not see |
 
-Step 5.4. Your gate. If red, one more implementer delegation ("fix the bug the test-engineer reported: [paste]"), then:
+Step 5.4. Your gate. If red, one more implementer delegation ("fix the bug the test-engineer reported: [paste]"), then execute the following commands.
 
 ```bash
 sbt check
@@ -1145,13 +1149,13 @@ git add -A && git commit -m "genesis 5: service rules plus adversarial hardening
 
 ### Phase 6: web tier and frontend
 
-Goal: the upickle-to-http4s bridge, the REST routes with centralized error mapping, the liveness/readiness split, the composition root, the browser frontend, and the route suite. One implementer delegation; the longest specification in the tutorial, and still pure specification: no discipline sentences needed.
+_Goal_: the upickle-to-http4s bridge, the REST routes with centralized error mapping, the liveness/readiness split, the composition root, the browser frontend, and the route suite. One implementer delegation; the longest specification in the tutorial, and still pure specification: no discipline sentences needed.
 
-Step 6.1. Fresh session. Prompt, verbatim:
+Step 6.1. Fresh session. Enter the following prompt, verbatim for execution.
 
 > Use the feature-implementer agent to build the presentation tier. (1) web/UPickleEntityCodec.scala: a given EntityEncoder for any upickle Writer (stringEncoder.contramap plus application/json content type) and a given EntityDecoder for any Reader via EntityDecoder.decodeBy(application/json) reading bodyText, mapping parse failures to MalformedMessageBodyFailure. (2) web/TaskRoutes.scala: GET /api/tasks?status= (unknown value raises ValidationFailed), GET/PATCH/DELETE /api/tasks/<id> via LongVar, POST /api/tasks returns 201; routes stay one line thin; a companion handleErrors middleware using recoverWith, NOT handleErrorWith, so unmatched throwables pass through with stack traces intact; map TaskNotFound to 404, ValidationFailed to 400, InvalidTransition to 409, DecodeFailure to 400. (3) web/HealthRoutes.scala: /healthz instant liveness; /readyz does SELECT 1 through the transactor, 503 with reason on failure (guard a null getMessage). (4) Main.scala: config, migrate, transactor Resource, wire repository into service into routes; Router of api, health, an explicit GET / redirect to /index.html, and a resource service for /static; request logging; Ember at configured host and port. (5) static/index.html: a single-file vanilla HTML/CSS/JS task board against /api/tasks: create, filter by status, advance status, delete, surface JSON error bodies. (6) TaskRoutesSuite running the HttpApp directly: 201 create; 400 empty title; 400 malformed JSON (not 500); 404 missing id; 409 illegal transition; 400 unknown status; a full lifecycle round-trip. Run `sbt check`; report the route table and each error's status code.
 
-Step 6.2. Where the two oddly specific clauses come from. The recoverWith clause and the explicit GET / redirect were review findings in an earlier run of this project: handleErrorWith takes a total function, so a partial match inside it turns unmatched exceptions into MatchError and destroys the original stack trace; and the static resource service maps exact paths only, so GET / returns 404 without the redirect. Findings become specification: once a reviewer catches a defect class, the next genesis carries the immunization in the work order.
+Step 6.2. The two oddly specific clauses come from the following reasoning. The recoverWith clause and the explicit GET / redirect were review findings in an earlier run of this project: handleErrorWith takes a total function, so a partial match inside it turns unmatched exceptions into MatchError and destroys the original stack trace; and the static resource service maps exact paths only, so GET / returns 404 without the redirect. Findings become specification; once a reviewer catches a defect class, the next genesis carries the immunization in the work order.
 
 Step 6.3. Your gate: run the app locally and verify in the browser the frontend.
 
@@ -1165,7 +1169,7 @@ git add -A && git commit -m "genesis 6: web tier and frontend"
 
 ### Phase 7: full review
 
-Goal: the entire codebase reviewed by the agent that cannot edit.
+_Goal_: the entire codebase reviewed by the agent that cannot edit.
 
 Step 7.1. Fresh session. Run the following prompt to perform code review.
 
@@ -1182,7 +1186,7 @@ Step 7.2. What may happen and how to explain it and fix it.
 | it runs sbt test but changes nothing | Bash is in its tools for evidence; Edit and Write are absent (mechanism 3) |
 | zero findings would be reported as APPROVE, not padded | its report contract legitimizes the empty result |
 
-Step 7.3. Your gate. Route each finding to its owner by artifact class (code to the implementer, anything constitutional to the factory-engineer through you), re-run the reviewer until APPROVE, then:
+Step 7.3. Your gate. Route each finding to its owner by artifact class (code to the implementer, anything constitutional to the factory-engineer through you), re-run the reviewer until APPROVE, then execute the following commands.
 
 ```bash
 git add -A && git commit -m "genesis 7: review findings resolved"
@@ -1192,9 +1196,9 @@ Never fix findings inside the review session. The reviewer has no hands by desig
 
 ### Phase 8: cloud infrastructure and scripts
 
-Goal: `infra/terraform` (VPC, security groups chained ALB to app to db, RDS with its password only in Secrets Manager, ECR with immutable SHA tags, ECS cluster and service with a deployment circuit breaker, ALB health-checking /healthz, CloudWatch alarms to SNS, outputs) and `scripts/` (deploy.sh, rollback.sh, smoke-test.sh). One owning agent authors both; you apply.
+_Goal_: `infra/terraform` (VPC, security groups chained ALB to app to db, RDS with its password only in Secrets Manager, ECR with immutable SHA tags, ECS cluster and service with a deployment circuit breaker, ALB health-checking /healthz, CloudWatch alarms to SNS, outputs) and `scripts/` (deploy.sh, rollback.sh, smoke-test.sh). One owning agent authors both; you apply.
 
-Step 8.1. Fresh session. The infrastructure prompt:
+Step 8.1. Fresh session. The infrastructure prompt is shown below.
 
 > Use the infra-engineer agent to design and write infra/terraform for TaskForge on AWS: VPC (public subnets: ALB only; private: app plus RDS), security groups chained ALB to app:8080 to db:5432; RDS Postgres 16 (encrypted, 7-day backups, deletion protection, password generated into Secrets Manager only, injected via the ECS task definition secrets block); ECR (immutable SHA tags, scan on push); ECS cluster plus Fargate task definition (execution role reads exactly the one secret; task role empty) plus service with deployment circuit breaker (enable plus rollback) and lifecycle ignore_changes on task_definition; ALB health-checking /healthz; four CloudWatch alarms (ALB 5xx, unhealthy hosts, RDS CPU, RDS connections) to SNS; outputs: alb_dns_name, ecr url, cluster and service names, log group. Backend: the S3 bucket and DynamoDB lock table from Session 0 (fill in the names). Run terraform validate and plan; present the plan; I will apply it myself.
 
@@ -1202,7 +1206,7 @@ Step 8.2. Run the scripts prompt specified below, same session or fresh.
 
 > Use the infra-engineer agent to write scripts/deploy.sh (refuse a dirty tree; APP_VERSION=git SHA sbt Docker/publishLocal; push to ECR; register a new task-definition revision with the new image via the AWS CLI; update the service; wait services-stable; VERIFY the service landed on the new revision, since the circuit breaker makes bare stable ambiguous, and exit 2 with evidence if not), scripts/rollback.sh (previous revision; wait; report), scripts/smoke-test.sh (healthz; readyz; a create/advance/delete round-trip; loud failures). Bash strict mode; greppable ==> step markers; no interactive prompts. Run bash -n on all three; report each script's gates.
 
-Step 8.3. What happens, and why:
+Step 8.3. What happens and why as a result of `claude` executing this prompt.
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -1211,7 +1215,7 @@ Step 8.3. What happens, and why:
 | deploy.sh verifies the landed revision instead of trusting wait services-stable | its iron law 3; the reason is stated there: circuit-breaker rollback also reports stable |
 | the same agent authors scripts the deploy-engineer will run but may not edit | its iron law 4, separation of powers, written from the author's side |
 
-Step 8.4. Your gate, the second constitutional-grade review. Read the plan resource by resource (about forty), apply, and record the outputs:
+Step 8.4. Your gate, the second constitutional-grade review. Read the plan resource by resource (about forty), apply, and record the outputs of the following commands.
 
 ```bash
 cd terraform
@@ -1224,7 +1228,7 @@ git add -A && git commit -m "genesis 8: infrastructure and scripts by infra-engi
 
 ### Phase 9: first deploy
 
-Goal: the application, live on AWS, deployed and gated by the deploy-engineer.
+_Goal_: the application, live on AWS, deployed and gated by the deploy-engineer.
 
 Step 9.1. Push all commits to your remote if CI is set up later; then, in a fresh session execute the following command.
 
@@ -1232,7 +1236,7 @@ Step 9.1. Push all commits to your remote if CI is set up later; then, in a fres
 /deploy staging
 ```
 
-Step 9.2. What happens, and why. The command file `.claude/commands/deploy.md` expands into a prompt that names the deploy-engineer and its gates, so an on-call human at 3 a.m. and you today produce the identical sequence. Then:
+Step 9.2. The command file `.claude/commands/deploy.md` expands into a prompt that names the deploy-engineer and its gates, so an on-call human at 3 a.m. and you today produce the identical sequence.
 
 | What you observe | The instruction that causes it |
 |---|---|
@@ -1243,7 +1247,7 @@ Step 9.2. What happens, and why. The command file `.claude/commands/deploy.md` e
 | smoke-test.sh must pass before the agent declares success | its role line defines a deploy as serving traffic with /readyz green, not as script exited 0 |
 | on any gate failure it rolls back and files evidence | its procedure step 4 |
 
-Step 9.3. Your gate:
+Step 9.3. Your gate is given by the following commands.
 
 ```bash
 curl http://<alb_dns_name>/healthz
@@ -1251,19 +1255,19 @@ curl http://<alb_dns_name>/readyz
 # open http://<alb_dns_name>/ and use the app
 ```
 
-A failed first deploy is common (an IAM edge, a subnet route). The deploy-engineer's report will contain stopped-task reasons captured before rollback; route them by artifact class: infra shape to infra-engineer (then you re-apply), code to the implementer, then `/deploy staging` again. The rollback muscle gets exercised on day one, which is when you want to learn it works.
+A failed first deploy is common (e.g., due to an IAM edge or a subnet route). The deploy-engineer's report will contain stopped-task reasons captured before rollback; route them by artifact class: infra shape to infra-engineer (then you re-apply), code to the implementer, then `/deploy staging` again. The rollback muscle gets exercised on day one, which is when you want to learn it works.
 
 ### Phase 10: pipelines
 
-Goal: three GitHub Actions workflows, authored by the infra-engineer: CI running the same `sbt check` as everyone, the @claude responder, and the weekly headless maintenance run.
+_Goal_: three GitHub Actions workflows, authored by the infra-engineer: CI running the same `sbt check` as everyone, the @claude responder, and the weekly headless maintenance run.
 
-Step 10.1. Fresh session. Prompt:
+Step 10.1. Fresh session. A prompt is given below.
 
 > Use the infra-engineer agent to write .github/workflows/ci.yml (push and PR: CI=true sbt "scalafmtCheckAll; Test/compile; test"; image build; on main, push to ECR via OIDC role-to-assume, no long-lived keys), claude.yml (anthropics/claude-code-action@v1 on @claude mentions, permissions for contents, PRs, issues, id-token, sbt toolchain preinstalled), and maintenance.yml (weekly cron plus workflow_dispatch: install claude-code; headless claude -p running the dependency-updater playbook, safe patch and minor bumps only, sbt check, changelog output, with scoped --allowedTools and --max-turns; open a PR only if the tree changed). Report each workflow's trigger, permissions, and gates.
 
-Step 10.2. What happens, and why. The maintenance workflow is the factory's unattended mode, and its safety comes from layering, not trust: the agent proposes (a branch and PR), CI gates with the same check alias, the reviewer gates, and you merge. In the runner, the whole factory applies unchanged, because the factory is repo files: CLAUDE.md loads, the agents exist, the hooks fire. Nothing about GitHub is special.
+Step 10.2. The maintenance workflow is the factory's unattended mode, and its safety comes from layering, not trust: the agent proposes (a branch and PR), CI gates with the same check alias, the reviewer gates, and you merge. In the runner, the whole factory applies unchanged, because the factory is repo files: CLAUDE.md loads, the agents exist, the hooks fire. Nothing about GitHub is special.
 
-Step 10.3. Your gate. Push, watch CI go green, comment @claude on a test issue and watch a runner answer. Then the final commit:
+Step 10.3. Your gate. Push, watch CI go green, comment @claude on a test issue and watch a runner answer. Then the final commit is performed using the commands below.
 
 ```bash
 git add -A && git commit -m "genesis 10: pipelines by infra-engineer"
@@ -1427,15 +1431,15 @@ Here is the addendum, paste-ready, in the tutorial's style. It extends the routi
 <a name="appendixE"></a>
 ## Appendix E:  Routing in meaning space
 
-The routing talks about words, and words are the right unit for writing repairs, but the matching itself does not happen at the character level. The router is a model: it compares your request and the ten descriptions in a learned representation space, where "bump the library", "upgrade the dependency", and "raise the version" are near neighbors despite sharing no characters. Token overlap is the special case where the distance is zero and the match is most reliable. This has one consequence in your favor and one against, and the loop needs adjustments for both.
+The routing talks about words, and words are the right unit for writing repairs, but the matching itself does not happen at the character level. The router is a model that compares your request and the ten descriptions in a learned representation space, where "bump the library", "upgrade the dependency", and "raise the version" are near neighbors despite sharing no characters. Token overlap is the special case where the distance is zero and the match is most reliable. This has one consequence in your favor and one against, and the loop needs adjustments for both.
 
-In your favor: synonymy is free. A request phrased in words a description never used can still route correctly, because the space clusters paraphrases on its own. Against you: polysemy is a trap. One surface word can live in two neighborhoods depending on its sense, and a description anchored on that word in one sense attracts requests using the other. The word migration is the standing example in this project: schema migrations belong to db-migrator, but "migrate to the new sbt version" is build work, and both requests contain the migrator's anchor word. No surface audit can see this collision; the misroute happens in meaning space.
+_Synonymy is free_. A request phrased in words a description never used can still route correctly, because the space clusters paraphrases on its own. 
 
-Five adjustments follow.
+_Polysemy is a trap_. One surface word can live in two neighborhoods depending on its sense, and a description anchored on that word in one sense attracts requests using the other. The word migration is the standing example in this project: schema migrations belong to db-migrator, but "migrate to the new sbt version" is build work, and both requests contain the migrator's anchor word. No surface audit can see this collision; the misroute happens in meaning space.
 
 Adjustment 1: prototypes, not synonym lists. Do not spend description budget enumerating paraphrases (bump, upgrade, update, raise); the space already merges them. Give each intent cluster one clear exemplar phrase and stop. This is also the deeper reason the earlier rules prefer artifact names over operations verbs: build.sbt and V*.sql have tight, nearly disjoint neighborhoods, while manage, handle, monitor, and maintain have huge overlapping ones. Broad verbs are the semantic equivalent of stop words: near every agent, discriminating for none. Prefer nouns with small neighborhoods; qualify every broad verb you keep.
 
-Adjustment 2: the polysemy sweep. List the domain words that carry more than one sense across your agents and decide, for each, which agent owns the bare word; every other description that needs the word must qualify it. The rule: a polysemous word appears unqualified in at most one description. For this project:
+Adjustment 2: the polysemy sweep. List the domain words that carry more than one sense across your agents and decide, for each, which agent owns the bare word; every other description that needs the word must qualify it. The rule is that a polysemous word appears unqualified in at most one description. 
 
 | Word | Bare form owned by | Everyone else must qualify |
 |---|---|---|
@@ -1456,7 +1460,7 @@ Finally, "one more keyword rarely flips it." Now consider the repair you would i
 
 This is why the passage then prescribes two structurally different repairs. Re-anchoring on an artifact name works when it can create the missing spike: if requests in this class do tend to mention or imply a concrete artifact (a file, a path), naming that artifact in the description gives future requests something exact to lock onto, and exact beats aggregate. And the contrastive disambiguation sentence ("migration here means database schema migrations; migrating library versions belongs to dependency-updater") works for a different reason entirely: the router is not actually a cosine calculator, it is a language model reading the descriptions and reasoning about them. An explicit contrast does not nudge a centroid; it changes the question the router is answering, handing it a decision rule instead of a slightly rearranged cloud. One redraws the boundary; a keyword only leans on it. 
 
-Two repairs work. Re-anchor on an artifact name, which collapses the ambiguity (migration is polysemous; V*.sql is not). Or add a contrastive disambiguation sentence that names the confusable intent explicitly:
+Two repairs work. Re-anchor on an artifact name, which collapses the ambiguity (migration is polysemous; V*.sql is not). Or add a contrastive disambiguation sentence that names the confusable intent explicitly as shown below.
 
 ```text
 Migration here means database schema migrations (V*.sql). Migrating library
@@ -1467,7 +1471,7 @@ A routing model weights an explicit contrast like this far more than any keyword
 
 Adjustment 4: generate hard negatives on purpose. The corpus generation step should explicitly request boundary-crossing paraphrases: requests whose vocabulary belongs to one agent and whose work belongs to another. Examples to seed the generator with: "upgrade the schema" (updater words, migrator work); "the build is failing in CI" (three variants with three different labels, depending on whether the failure is in build.sbt, the workflow file, or the code). Boundary rows are where routing behavior is actually determined; interior rows like "add a task feature" are nearly information-free. Weight the corpus toward the boundary.
 
-Adjustment 5: embeddings as a smoke detector, never as the objective. A cheap static check that predicts trouble before the behavioral suite runs:
+Adjustment 5: embeddings as a smoke detector, never as the objective. A cheap static check that predicts trouble before the behavioral suite runs as follows
 
 ```bash
 # sketch: embed descriptions, flag suspiciously similar pairs
@@ -1489,7 +1493,7 @@ PY
 
 High-similarity description pairs predict future misroutes between those agents; low-margin corpus rows (similarity to the correct description barely above the best wrong one) are the first to flip when the router model changes. Both are prioritization signals only. The embedding model is a proxy: the real router uses full contextual attention, not a bi-encoder. If you edit descriptions to maximize cosine scores you optimize the proxy, not the behavior. The behavioral suite in docs/routing-tests.md remains the only ground truth.
 
-What the fixpoint converges on, restated in this light: not a bag of words but a partition of meaning space into ten regions. Descriptions act as labeled prototypes; exemplar phrases move the centers; disambiguation sentences and exclusions carve the boundaries; the hard-negative corpus samples where the boundaries currently fall. The loop is prototype refinement, its convergence is empirical, and it is relative to the router model, which is why the suite reruns after every model upgrade. Nothing in the word-level procedure is invalidated; the effort just moves: fewer keywords, one prototype per cluster, an explicit contrast at every known ambiguity, and a test corpus weighted toward the boundaries that surface reading cannot see.
+What the fixpoint converges on is not a bag of words but a partition of meaning space into ten regions. Descriptions act as labeled prototypes; exemplar phrases move the centers; disambiguation sentences and exclusions carve the boundaries; the hard-negative corpus samples where the boundaries currently fall. The loop is prototype refinement, its convergence is empirical, and it is relative to the router model, which is why the suite reruns after every model upgrade. Nothing in the word-level procedure is invalidated; the effort just moves: fewer keywords, one prototype per cluster, an explicit contrast at every known ambiguity, and a test corpus weighted toward the boundaries that surface reading cannot see.
 
 ---
 <a name="appendixF"></a>
@@ -1497,11 +1501,11 @@ What the fixpoint converges on, restated in this light: not a bag of words but a
 
 Mechanism 2 has a consequence that deserves its own treatment: if agent B's work depends on agent A's output, nothing connects them. B cannot see A's transcript, cannot call A, and cannot wait for A. Dependencies are therefore handled in exactly three places, and never agent to agent.
 
-Place 1: the orchestrator's control flow. Known dependencies are sequencing, and sequencing lives in the plan, never in agent files. The orchestrator runs A, reads its report, gates, then runs B with A's report pasted into the prompt. This is why the genesis phases are ordered: schema before data tier, infrastructure before deploy. Agent files stay timeless; the dependency graph is per-project state and travels in task text.
+_Place 1_: the orchestrator's control flow. Known dependencies are sequencing, and sequencing lives in the plan, never in agent files. The orchestrator runs A, reads its report, gates, then runs B with A's report pasted into the prompt. This is why the genesis phases are ordered in sequence, i.e., schema before data tier, infrastructure before deploy. Agent files stay timeless; the dependency graph is per-project state and travels in task text.
 
-Place 2: the durable world. Wherever possible, encode the dependency as machine-readable state that B reads itself, instead of as a fact someone must remember to pass. Reports carry judgment; the world carries facts. B should never be told the VPC id in a prompt, because its own procedure reads `terraform output -raw vpc_id`; the deploy-engineer re-derives the ECR URL from `aws ecr describe-repositories`; the Stop hook reads a marker file rather than trusting anyone's claim that tests ran. Every agent whose work has upstream dependencies opens its procedure with this move (verify, do not trust), which converts a missing dependency from a crash in the middle of work into a clean, early, routable stop.
+_Place 2_: the durable world. Wherever possible, encode the dependency as machine-readable state that B reads itself, instead of as a fact someone must remember to pass. Reports carry judgment; the world carries facts. B should never be told the VPC id in a prompt, because its own procedure reads `terraform output -raw vpc_id`; the deploy-engineer re-derives the ECR URL from `aws ecr describe-repositories`; the Stop hook reads a marker file rather than trusting anyone's claim that tests ran. Every agent whose work has upstream dependencies opens its procedure with this move (verify, do not trust), which converts a missing dependency from a crash in the middle of work into a clean, early, routable stop.
 
-Place 3: the blocked agent's own report, when the dependency is discovered as a runtime error. This is the case the protocol below exists for.
+_Place 3_: the blocked agent's own report, when the dependency is discovered as a runtime error. This is the case the protocol below exists for.
 
 ### When a dependency fails at runtime
 
@@ -1513,10 +1517,10 @@ Suppose the deploy-engineer is mid-procedure and an AWS call fails because VPC X
 
 ### The repair loop
 
-The loop belongs to the orchestrator. Blocked agents do not invoke their repairers; if agents auto-triggered each other, the audit trail would dissolve and a misclassified error would cascade unsupervised. The loop, shown on the VPC example with real prompts:
+The loop belongs to the orchestrator. Blocked agents do not invoke their repairers; if agents auto-triggered each other, the audit trail would dissolve and a misclassified error would cascade unsupervised. The loop, shown on the VPC example with real prompts as seen below.
 
 ```text
-You:  /deploy staging
+The human architect:  /deploy staging
 
 deploy-engineer: preconditions pass; image pushed; service update fails.
 Report: DEPLOY BLOCKED.
@@ -1573,9 +1577,6 @@ Agent procedures must be idempotent so the re-run is safe by construction.
 ```
 
 ---
-Here it is as one single appendix section, no subsections, paste-ready.
-
----
 <a name="appendixG"></a>
 ## Appendix G: hooks and permissions, the deterministic floor
 
@@ -1602,56 +1603,104 @@ Everything else in the agent system is text read by a model or an LLM, and a mod
 }
 ```
 
-Permissions carve every tool invocation into three zones. A rule has the shape Tool(pattern): tool name plus a glob over the argument (the command line for Bash, the path for Read). The allow list is the frictionless zone: routine, harmless verbs (build, test, git bookkeeping, image builds, read-only AWS queries, terraform plan) run without an approval prompt, both to keep agents flowing and to protect the human, because a person asked to approve fifty trivial commands learns to approve without reading, which destroys approval everywhere else. The deny list is the impossible zone: terraform apply and destroy, RDS deletion, force-push, and reads of .env files are refused no matter who asks or how the prompt is phrased, and deny beats allow on conflict. The .env rule has a second purpose: a secret that never enters the model's context can never surface in its output. Everything matching neither list falls to the third zone, the interactive approval prompt, which the two lists deliberately keep small enough that a human reads each one with attention. The design in one line: frictionless safe path, impossible catastrophic path, human friction only in the judgment-requiring middle.
+Permissions carve every tool invocation into three zones. A rule has the shape Tool(pattern): tool name plus a glob over the argument (the command line for Bash, the path for Read). 
+- The allow list is the frictionless zone: routine, harmless verbs (build, test, git bookkeeping, image builds, read-only AWS queries, terraform plan) run without an approval prompt, both to keep agents flowing and to protect the human, because a person asked to approve fifty trivial commands learns to approve without reading, which destroys approval everywhere else. 
+- The deny list is the impossible zone: terraform apply and destroy, RDS deletion, force-push, and reads of .env files are refused no matter who asks or how the prompt is phrased, and deny beats allow on conflict. The .env rule has a second purpose: a secret that never enters the model's context can never surface in its output. 
+- Everything matching neither list falls to the third zone, the interactive approval prompt, which the two lists deliberately keep small enough that a human reads each one with attention. The design in one line: frictionless safe path, impossible catastrophic path, human friction only in the judgment-requiring middle.
 
-In the tutorial's vocabulary, the floor is specifically hooks plus permissions (the contents of `.claude/settings.json` and the hook scripts), not CLAUDE.md. The two share one property and differ on the one that matters. They share universality. CLAUDE.md is loaded into every context, and the floor applies to every tool call, so both bind all ten agents plus the orchestrator equally. That is the property the phrase "every agent stands on them equally" points at, and reading it as a description of CLAUDE.md is natural, because CLAUDE.md fits it too.
+In the tutorial's vocabulary, the floor is specifically hooks + permissions (the contents of `.claude/settings.json` and the hook scripts), not CLAUDE.md. They share universality - `CLAUDE.md` is loaded into every context, and the floor applies to every tool call, so both bind all ten agents plus the orchestrator equally. That is the property the phrase "every agent stands on them equally" points at, and reading it as a description of CLAUDE.md is natural, because CLAUDE.md fits it too.
 
-They differ in what they are made of. CLAUDE.md is shared text, read by the LLM and followed probabilistically; a sufficiently persuasive prompt, a long context, or plain salience decay can defeat any sentence in it. The floor is shared code, executed by the runtime before, after, and around the model's tool calls; no wording anywhere can defeat it. That difference is the entire reason the floor exists as a separate concept: it is the layer that still holds when the text layer fails. The metaphor is chosen for exactly that: a floor is what you land on when everything above gives way.
-
-The cleanest way to hold all the pieces is a two-by-two, since the system's four control surfaces are just the crossings of two axes, shared versus per-agent and text versus code:
+They differ in what they are made of. `CLAUDE.md` is shared text, read by the LLM and followed probabilistically; a sufficiently persuasive prompt, a long context, or plain salience decay can defeat any sentence in it. The floor is shared code, executed by the runtime before, after, and around the model's tool calls; no wording anywhere can defeat it. That difference is the entire reason the floor exists as a separate concept: it is the layer that still holds when the text layer fails. The metaphor is chosen for exactly that: a floor is what you land on when everything above gives way.
 
 | | Text (LLM reads it, persuadable) | Code (runtime executes it, not persuadable) |
 |---|---|---|
 | Shared by everyone | CLAUDE.md, the constitution | permissions and hooks, the floor |
 | Per agent | the agent body (laws, procedure) | the tools fence in frontmatter |
 
-So CLAUDE.md and the floor are vertical neighbors (both shared), while CLAUDE.md and the agent bodies are horizontal neighbors (both text). The tutorial's names keep them apart: constitution and memory for the shared text, floor for the shared code, fence for the per-agent code.
+So `CLAUDE.md` and the floor are vertical neighbors (both shared), while CLAUDE.md and the agent bodies are horizontal neighbors (both text). The tutorial's names keep them apart: constitution and memory for the shared text, floor for the shared code, fence for the per-agent code. Change "they are called the floor because every agent stands on them equally" to something like: "they are called the floor because they sit beneath every agent: shared like `CLAUDE.md`, but made of code the model cannot argue with, which is what holds when instructions fail." That keeps the metaphor and removes the ambiguity.
 
-If the sentence misled you, it will mislead other readers; a one-word patch fixes it. Change "they are called the floor because every agent stands on them equally" to something like: "they are called the floor because they sit beneath every agent: shared like CLAUDE.md, but made of code the model cannot argue with, which is what holds when instructions fail." That keeps the metaphor and removes the ambiguity.
+Hooks are external scripts run at fixed lifecycle moments: `PreToolUse` before a tool call executes, `PostToolUse` after it completes, `Stop` when an agent tries to finish; the matcher selects which tool calls trigger them. The execution contract is that the hook receives a JSON payload on stdin (tool name, full tool input, event name, and for Stop hooks a stop_hook_active flag); `exit 0` means proceed; `exit 2` means block, with whatever the hook wrote to `stderr` fed back to the model; any other exit is a non-blocking error. The `stderr` channel conveys the message as an instruction injected at exactly the right moment, and its quality decides what happens next. A bare "blocked" produces a retry loop; "Blocked: matches forbidden pattern 'DROP TABLE'; if this is really needed, a human must run it manually" produces routing. Write every blocking message as a course-correction naming the legitimate alternative.
 
-Hooks are external scripts run at fixed lifecycle moments: PreToolUse before a tool call executes, PostToolUse after it completes, Stop when an agent tries to finish; the matcher selects which tool calls trigger them. The execution contract: the hook receives a JSON payload on stdin (tool name, full tool input, event name, and for Stop hooks a stop_hook_active flag); exit 0 means proceed; exit 2 means block, with whatever the hook wrote to stderr fed back to the model; any other exit is a non-blocking error. The stderr channel is the underappreciated part: the message is an instruction injected at exactly the right moment, and its quality decides what happens next. A bare "blocked" produces a retry loop; "Blocked: matches forbidden pattern 'DROP TABLE'; if this is really needed, a human must run it manually" produces routing. Write every blocking message as a course-correction naming the legitimate alternative.
+Replacement text, paste-ready, same content reorganized so each hook gets its own short block ending in what you do about it, with the probes made explicit.
 
-The three hooks in this project are the three archetypes, each a hook rather than a sentence for a stated reason. The normalizer (format-scala.sh, PostToolUse on Edit|Write) formats the one touched Scala file and always exits 0: instruction-level formatting compliance runs about 95 percent, and the missing 5 percent becomes diff noise polluting every later review; conveniences never block, so its failures are swallowed. The guard (guard-dangerous.sh, PreToolUse on Bash) matches the actual command string, case-insensitively, against a pattern list (DROP TABLE, TRUNCATE, terraform destroy, rm -rf /, force-delete flags) and exits 2 on a hit. It exists alongside the deny list because the two match different things: permission globs match the shape of an invocation, anchored at the front, while the guard reads the whole string, where a destructive statement can hide inside psql -c "..." or a heredoc; two nets with different weaves catch different fish, and every incident that reveals a new dangerous shape adds a pattern here. The completion gate (verify-tests-ran.sh, Stop) first exits 0 if stop_hook_active is set, the mandatory loop guard, since the runtime sets that flag on the continuation a previous block caused. Then, if git diff shows changed .scala files newer than the marker file .claude/.last-test-run (touched by the markTestRun task at the end of the sbt check alias, so the build itself writes the evidence and no log parsing is needed), it exits 2 with "Run sbt check and fix any failures before finishing": the definition of done as a precondition of stopping rather than a request.
+---
 
-The floor composes with the other mechanisms as the middle layers of a four-layer stack, each catching what the previous cannot: the tool fence (agent frontmatter) removes whole capability classes, permissions block invocation shapes, hooks inspect semantic content and lifecycle conditions, and instructions carry everything that requires judgment, the only persuadable layer. The sorting rule for where any given rule belongs: if 95 percent compliance is acceptable, it stays prose with a named detection (a reviewer axis, a CI step); if 95 percent is a disaster, it goes into the floor. Two operational facts complete the picture. The floor fails silently (a mistyped matcher matches nothing, a hook without its executable bit never runs, and nothing tells you), so it is verified empirically, never by reading: probe the guard with echo 'DROP TABLE tasks' and watch it block, trip the Stop hook once on purpose, and repeat both after any change to settings.json; mechanism you have not seen fire is mechanism you do not have. And the floor is constitutional: settings.json and the hook scripts belong to the factory-engineer, whose own laws forbid removing the guard patterns, the stop_hook_active check, or the deny rules, so any weakening diff requires human ratification. The floor protects the agents from their failure modes; the ratification gate protects the floor from the agents.
+The three hooks in this project are the three archetypes of what hooks are for. Each one is code rather than a sentence in an agent file, and each for a stated reason. The formatter, `format-scala.sh`, runs as PostToolUse on every Edit or Write. It formats the one Scala file that was just touched and always exits 0. The reason it is a hook, since agents follow formatting instructions about 95% of the time, and the missing 5% shows up as diff noise in every later review, this is where it hides real changes. The reason it always exits 0 is a convenience that never block work, so even its own failures are swallowed. The rule to take away: cosmetic steps run after the fact and exit 0, always.
+
+The guard, `guard-dangerous.sh`, runs as PreToolUse on every Bash call, before the command executes. It reads the full command string, matches it case-insensitively against a pattern list (DROP TABLE, TRUNCATE, terraform destroy, rm -rf /, force-delete flags), and exits 2 on a hit, which blocks the command and shows the hook's stderr message to the agent. You might ask why this exists when settings.json already has a deny list. The two match different things. A permission rule matches the shape of an invocation, anchored at the start, so it catches `terraform apply` typed plainly. The guard reads the entire string, so it catches the destructive statement hiding in the middle, inside `psql -c "DROP TABLE tasks"` or a heredoc, where no permission glob can see it. Two nets with different weaves catch different fish. The practice to adopt: every incident that reveals a new dangerous command shape ends with one new pattern added to this list, through the factory-engineer.
+
+The completion gate, `verify-tests-ran.sh`, runs on Stop, when an agent tries to declare itself finished. Its first line exits 0 if `stop_hook_active` is set; that flag marks a continuation that a previous block already caused, and without this check the hook would bounce the agent forever. Then it checks one thing: are there changed `.scala` files newer than the marker file `.claude/.last-test-run`? That marker is touched by the `markTestRun` task at the end of the `sbt check` alias, so the build itself writes the evidence and the hook parses no logs. If sources are newer than the marker, it exits 2 with the message "Run sbt check and fix any failures before finishing", and the agent goes back to work. The effect: the definition of done stops being a request in a file and becomes a precondition of stopping.
+
+The floor sits inside a four-layer stack, and each layer exists because of what the previous one cannot see.
+
+| Layer | Lives in | Catches | Can it be argued with? |
+|---|---|---|---|
+| tool fence | agent frontmatter | whole capability classes (the reviewer cannot edit at all) | no |
+| permissions | settings.json allow/deny | invocation shapes, anchored (terraform apply, force-push) | no |
+| hooks | settings.json plus scripts | content and lifecycle (a DROP inside a string; finishing untested) | no |
+| instructions | agent files, CLAUDE.md | everything requiring judgment | yes |
+
+The sorting rule when you must decide where a new rule belongs: ask what happens at 95 percent compliance. If 95 percent is acceptable, the rule stays prose, paired with a named detection such as a reviewer axis or a CI step. If 95 percent is a disaster, the rule goes into the floor, because only the floor delivers 100.
+
+Two operational facts complete the picture, and both are things you do rather than know.
+
+First, the floor fails silently. A mistyped matcher matches nothing, a hook script without its executable bit simply never runs, and nothing anywhere tells you. So the floor is verified empirically, never by reading the config. The standing probes:
+
+```text
+> run this command: echo 'DROP TABLE tasks'     # expect a block, exit 2
+# then: edit any .scala file and ask the agent to finish without testing
+#       expect the Stop hook to bounce it into sbt check
+```
+
+Run both probes after ratifying Phase 1, and run them again after any change to settings.json or the hook scripts. A mechanism you have not seen fire is a mechanism you do not have.
+
+Second, the floor is constitutional - `settings.json` and the hook scripts belong to the factory-engineer, whose own laws forbid removing the guard patterns, the `stop_hook_active` check, or the deny rules, so any diff that weakens the floor must survive your ratification gate. The symmetry is the design where the floor protects the agents from their failure modes, and the ratification gate protects the floor from the agents.
 
 ---
 <a name="appendixG"></a>
 ## Appendix G:  Forming the tools line from first principles
 
+The complete tool universe of this project is 12 names: eight built into Claude Code and four served by the MCP servers of [Appendix E](#appendix-e-the-mcp-servers-and-what-they-are-for). Every `tools:` line in every agent file draws only from this table, and a tool absent from an agent's line does not exist for that agent.
+
+| Tool | What it does | Who holds it here, and why |
+|---|---|---|
+| Read | Returns the contents of one file, given its path, optionally a line range. The basic act of looking at code, config, or a report on disk. | every agent; an agent that cannot read guesses |
+| Glob | Finds files by name pattern (`src/**/*.scala`, `.claude/agents/*.md`) and returns matching paths. Answers what exists without opening anything. | every agent; it is how the factory audits for orphans and collisions |
+| Grep | Searches file contents by regular expression and returns matching lines with locations. Answers where something is said, not just where a file is. | every agent; the reviewer's tier-violation axis is a grep for http4s imports inside the service tier |
+| Write | Creates a file or replaces one whole, given a path and full content. The creation tool. | the agents that create artifact classes from scratch: factory-engineer, build-engineer, feature-implementer, test-engineer, db-migrator, infra-engineer |
+| Edit | Changes part of an existing file by replacing an exact text span. The modification tool, incapable of creating anything. | the writers above, plus dependency-updater, which holds Edit but not Write: it can bump a version on an existing ledger line, and it cannot create structure |
+| Bash | Runs an arbitrary shell command and returns its output and exit code: sbt, git, docker, terraform plan, the AWS CLI. The general escape hatch, which is exactly why the guard hook and the permission lists watch it specifically. | every agent; purpose differs by role, evidence for the reviewer, builds and tests for the implementer, scripts for the deployer |
+| WebSearch | Searches the live web and returns results. Reaches facts newer than the model's training data, such as current release versions and CVE advisories. | dependency-updater only; version currency is its whole job, and nobody else needs the distraction |
+| WebFetch | Retrieves one URL, a changelog, release notes, an advisory, and returns its content. The follow-up to a search hit. | dependency-updater only, same reason |
+| mcp__postgres__run_query | Runs a SQL query against the live database through a server started read-only, returning rows as data. Inspection of real schema and real state, with writes absent at the server level. | db-migrator, to inspect the schema before authoring a migration; incident-responder, to diagnose without the ability to repair data |
+| mcp__aws-api__call_aws | Executes read-oriented AWS API calls and returns structured results: describe services, get metrics, list resources. Looking at cloud state, not changing it. | infra-engineer, to check reality while authoring Terraform; deploy-engineer, to poll rollout state; incident-responder, to read alarms and metrics |
+| mcp__ecs__ecs_resource_management | Structured, read-only view of ECS clusters, services, tasks, and task-definition revisions, with the write side disabled by ALLOW_WRITE=false. | deploy-engineer; its key use is comparing the running revision against the just-registered one, since the circuit breaker makes bare stability ambiguous |
+| mcp__ecs__ecs_troubleshooting_tool | Pulls ECS failure evidence, above all stopped-task reasons, which name the killer directly: OOM, image pull failure, failed health check, missing secret. | incident-responder; its triage order starts here because this answer is one call away |
+
+Nothing in the MCP rows can write, which is the proposal-and-disposal rule expressed as configuration: no agent can mutate cloud or database state except through scripts and migrations that humans gate. And the finest-grained row is the Edit-without-Write fence on the dependency-updater, worth pausing on because it shows how much policy a tool list can carry: the difference between changing a line and creating a file is exactly the difference between the updater's mandate and the build-engineer's.
+
 The `tools:` line looks like configuration, but it is the last step of a derivation that starts from the question "what system should exist?" If you know the derivation, you can form the line for any agent in any project, and you can re-derive it later to check that it is still right. The chain has six levels, and each level answers one question.
 
-**Level 0: fix the action ontology**. The first principle everything else stands on: in this runtime, every effect on the world is a tool call. An agent is not a person with hands; it is a policy that emits tool calls from a fixed alphabet. Therefore "designing what an agent may do" is not a matter of job descriptions; it is literally choosing a sub-alphabet. Write the full alphabet down once, grouped by what each symbol touches: perception of the repository (Read, Grep, Glob), mutation of the repository (Edit for existing files, Write for new ones), arbitrary execution (Bash, the escape hatch into everything the shell can reach), perception of the external world (MCP read tools: the database, AWS state), mutation of the external world (MCP write tools, which this architecture avoids on principle, routing external writes through reviewed scripts instead), and knowledge acquisition (WebSearch, WebFetch). This grouping is the periodic table the rest of the derivation selects from.
+**Level 0: fix the action ontology**. The first principle everything else stands on is whether in this runtime, every effect on the world is a tool call. An agent is not a person with hands; it is a policy that emits tool calls from a fixed menu. Therefore "designing what an agent may do" is not a matter of job descriptions; it is literally choosing a submenu. Write the full menu down once, grouped by what each item touches: perception of the repository (Read, Grep, Glob), mutation of the repository (Edit for existing files, Write for new ones), arbitrary execution (Bash, the escape hatch into everything the shell can reach), perception of the external world (MCP read tools: the database, AWS state), mutation of the external world (MCP write tools, which this architecture avoids on principle, routing external writes through reviewed scripts instead), and knowledge acquisition (WebSearch, WebFetch).
 
 **Level 1: enumerate the state the system consists of**. From "a deployed Scala three-tier application" derive the state spaces the system touches: the repository (subdivided into artifact classes: build definition, source, tests, migrations, infrastructure code, the agent system itself), the external runtime (AWS resources, the live database), and the information environment (library versions, advisories). Every artifact class and every external space will need, at minimum, someone who can perceive it and someone who can change it. This enumeration is what makes the later steps checkable: a tool grant is justifiable only by pointing at a state space the role must touch.
 
-**Level 2: state the invariants the system must preserve**. These come from what could destroy the system, not from what builds it: exactly one writer per artifact class (else concurrent uncoordinated mutation); the checker never shares authority with the writer it checks (else defects survive); irreversible acts are enacted only by a human (else the worst possible moment test fails); verification precedes done (else unverified work compounds); secrets never enter model context (else they can exit it). Notice that every invariant is a constraint over the action space from Level 0: "one writer" constrains who holds mutation symbols for which paths; "checker holds no write authority" removes mutation symbols from a role entirely; "irreversible acts are human" removes external-mutation symbols from everyone.
+**Level 2: state the invariants the system must preserve**. These come from what could destroy the system: exactly one writer per artifact class (else concurrent uncoordinated mutation); the checker never shares authority with the writer it checks (else defects survive); irreversible acts are enacted only by a human (else the worst possible moment test fails); verification precedes done (else unverified work compounds); secrets never enter model context (else they can exit it). Notice that every invariant is a constraint over the action space from Level 0: "one writer" constrains who holds mutation symbols for which paths; "checker holds no write authority" removes mutation symbols from a role entirely; "irreversible acts are human" removes external-mutation symbols from everyone.
 
 **Level 3: partition the work into roles such that the invariants become expressible per role**. This is where the ten agents come from, and the fence is the reason the partition has to be shaped the way it is: the fence can only speak at the granularity of whole tools per agent, so roles must be cut so that each role's legitimate action set is describable as a tool subset. If one role legitimately needed "write source and also write migrations", the one-writer invariant could not be expressed by any fence, and you would be back to trusting prose. The partition is chosen so that authority boundaries fall on tool boundaries wherever possible. That is a first-principles insight worth stating plainly: the team structure is partly a compilation target for the fence mechanism. You design roles so that safety properties compile down to tool subsets.
 
-**Level 4: derive each role's demand set from its procedure**. Write the role's procedure as a sequence of interactions with the state spaces of Level 1, and under each step write the weakest symbol from the Level 0 alphabet that performs it. The union of those symbols is the demand set. For the code-reviewer: obtain the change set (git diff, so Bash), read touched files whole (Read), check structural claims across the tree (Grep, Glob), compile and run tests as evidence (Bash again). Demand set: Read, Grep, Glob, Bash. For the dependency-updater: enumerate current versions (Read, Grep), check upstream (WebSearch, WebFetch), modify existing build files (Edit, and pointedly not Write, because its procedure never creates a file), verify (Bash for sbt check). Demand set: Read, Grep, Glob, Edit, Bash, WebSearch, WebFetch.
+**Level 4: derive each role's demand set from its procedure**. Write the role's procedure as a sequence of interactions with the state spaces of Level 1, and under each step write the weakest symbol from the Level 0 menu that performs it. The union of those menu items is the demand set. For the code-reviewer: obtain the change set (git diff, so Bash), read touched files whole (Read), check structural claims across the tree (Grep, Glob), compile and run tests as evidence (Bash again). Demand set: Read, Grep, Glob, Bash. For the dependency-updater: enumerate current versions (Read, Grep), check upstream (WebSearch, WebFetch), modify existing build files (Edit, and pointedly not Write, because its procedure never creates a file), verify (Bash for sbt check). Demand set: Read, Grep, Glob, Edit, Bash, WebSearch, WebFetch.
 
-**Level 5: subtract, then reconcile against the invariants**. The fence is not the demand set; it is the demand set filtered through Level 2. Three checks, in order. First, the invariant check: does any demanded symbol let the role violate an invariant? The reviewer's demand set contains no mutation symbols, so the checker-writer invariant is satisfied by construction; if it had contained one, the resolution is never "grant it and instruct against misuse" but either reshape the procedure (the tester's failing-test handoff exists precisely so the tester's Write never needs to touch production code) or accept a residue consciously. Second, the superset check: Bash subsumes most other symbols (a shell can write files and fetch URLs), so any fence containing Bash is really "fence plus floor plus evidence", and you must decide per role whether that layered guarantee suffices or whether Bash itself must go, paying the price in lost verification ability. Record the decision; do not let it happen by default. Third, the absence check, in the opposite direction: walk the procedure once more and confirm every step still has its symbol, because an over-subtracted fence produces an agent that thrashes at or silently skips the step it cannot perform, and skipped verification is the most expensive absence there is.
+**Level 5: subtract, then reconcile against the invariants**. The fence is not the demand set; it is the demand set filtered through Level 2. First, the invariant check: does any demanded symbol let the role violate an invariant? The reviewer's demand set contains no mutation symbols, so the checker-writer invariant is satisfied by construction; if it had contained one, the resolution is never "grant it and instruct against misuse" but either reshape the procedure (the tester's failing-test handoff exists precisely so the tester's Write never needs to touch production code) or accept a residue consciously. Second, the superset check: Bash subsumes most other symbols (a shell can write files and fetch URLs), so any fence containing Bash is really "fence plus floor plus evidence", and you must decide per role whether that layered guarantee suffices or whether Bash itself must go, paying the price in lost verification ability. Record the decision; do not let it happen by default. Third, the absence check, in the opposite direction: walk the procedure once more and confirm every step still has its symbol, because an over-subtracted fence produces an agent that thrashes at or silently skips the step it cannot perform, and skipped verification is the most expensive absence there is.
 
 **Level 6: emit the line, and store the proof next to the theorem**. The line itself is now forced as follows.
 
 ```yaml
 tools: Read, Grep, Glob, Bash
 ```
+The derivation that produced it (which invariant removed Edit and Write; which procedure step justified Bash; what the Bash residue is and which layer covers it) lives in the authority matrix, and that placement is the final first principle: every fence must be re-derivable, because fences change. When someone later proposes adding Edit to the reviewer "so it can fix trivial findings itself", the question is which line of the derivation breaks, and the matrix shows it immediately - the checker-writer invariant of Level 2. The proposal is thereby revealed as a change to the system's safety properties, not to a config file, which is exactly why fence edits are constitutional. In the same spirit, the empirical probes are the proof's test suite: asking the reviewer to edit a file and expecting refusal-by-inability is checking that the deployed line still matches the derived one.
 
-But the line alone is only the conclusion. The derivation that produced it (which invariant removed Edit and Write; which procedure step justified Bash; what the Bash residue is and which layer covers it) lives in the authority matrix, and that placement is the final first principle: every fence must be re-derivable, because fences change. When someone later proposes adding Edit to the reviewer "so it can fix trivial findings itself", the question is not whether that sounds convenient; it is which line of the derivation breaks, and the matrix shows it immediately: the checker-writer invariant of Level 2. The proposal is thereby revealed as a change to the system's safety properties, not to a config file, which is exactly why fence edits are constitutional. In the same spirit, the empirical probes are the proof's test suite: asking the reviewer to edit a file and expecting refusal-by-inability is checking that the deployed line still matches the derived one.
-
-Compressed to a formula you can apply to any new system: fix the action alphabet the runtime gives you; enumerate the state your system consists of; write the invariants whose violation would destroy it; cut roles so invariants land on tool boundaries; per role, take the weakest symbols its procedure demands; subtract what the invariants forbid, reconcile what they cannot forbid (the Bash residue) with lower layers; emit the line and keep the derivation. The tools line is then not a setting you chose but a theorem you proved, and the agent system's safety story is the collection of those proofs plus the machinery that re-checks them.
+Compressed to a formula you can apply to any new system: fix the action menu the runtime gives you; enumerate the state your system consists of; write the invariants whose violation would destroy it; cut roles so invariants land on tool boundaries; per role, take the weakest symbols its procedure demands; subtract what the invariants forbid, reconcile what they cannot forbid (the Bash residue) with lower layers; emit the line and keep the derivation. The tools line is then not a setting you chose but a theorem you proved, and the agent system's safety story is the collection of those proofs plus the machinery that re-checks them.
 
 
 <a name="appendixH"></a>
@@ -2124,3 +2173,69 @@ The last step is the one this tutorial keeps returning to: findings become speci
 | fix the code but not the genesis prompt | the next regeneration reintroduces the bug verbatim | findings become specification |
 
 The summary sentence, if you keep only one: a semantic error is repaired specification-first, oracle-second, code-third, and the code edit is the smallest and least interesting of the three.
+
+Here is the rewritten appendix, paste-ready, with the third column added to the P.1 table quoting the exact prompt words that carry each artifact. TOC line unchanged:
+
+```markdown
+- [Appendix P: where the requirements actually come from](#appendix-p-where-the-requirements-actually-come-from)
+```
+
+---
+
+## Appendix P: where the requirements actually come from
+
+A careful reader eventually notices something missing from this tutorial. There is no requirements document. Nobody writes user stories, nobody sketches the GUI, nobody sits down and states the business logic as business logic. Yet the finished system has definite behavior, a working browser interface, and rules that reject an empty title and refuse an illegal status transition. Software does not get behavior from nowhere, so this appendix answers the question directly: where did the direction come from, who supplied it, and through what channel?
+
+The answer has three parts. The direction exists, but it is compressed into the work orders rather than gathered into a document. The compression works because the model expands it against a genre it already knows. And the expansion is made safe because every gap the model fills is converted back into an explicit, reviewable artifact before it can matter. Take these in order.
+
+### P.1. The specification exists; it is just not shaped like one
+
+Conventional projects carry four specification artifacts: a product description, a feature list or user stories, a data and rules specification, and interface mockups with acceptance criteria. None of those files exist in this repository, but every one of their jobs is done by specific sentences in the prompts. The third column quotes the exact words, so you can see both that the direction is real and how little text carries it.
+
+| Conventional artifact | Where its content lives here | The actual words in the prompt |
+|---|---|---|
+| product description | two words in the [Phase 1](#phase-1-the-factory-builds-the-factory) prompt, plus one line in [section 1](#1-what-you-will-build) | "Scala 3 three-tier task-management web app"; "TaskForge: a task manager with an http4s web tier" |
+| data model | the [Phase 3](#phase-3-the-domain-and-the-wire-format) prompt | "`Task(id: Long, title, description, status, createdAt, updatedAt) derives ReadWriter`"; "`enum TaskStatus derives ReadWriter` with Todo, InProgress, Done"; "`UpdateTaskRequest` with all-Option fields defaulted None (absent JSON keys must parse)" |
+| business rules | the [Phase 5](#phase-5-service-tier-and-adversarial-tests) prompt, written as data by the human | "create (title trimmed, nonempty, at most 200 chars)"; "Encode legal transitions as a Set of (from, to) pairs: Todo to InProgress, InProgress to Done, Done to Todo, InProgress to Todo, plus same-state no-ops, so the rules are data, not if-trees"; "delete (false raises TaskNotFound)" |
+| error semantics | the Phase 3 and [Phase 6](#phase-6-web-tier-and-frontend) prompts | "TaskNotFound(id), ValidationFailed(reason), InvalidTransition(from, to)"; "map TaskNotFound to 404, ValidationFailed to 400, InvalidTransition to 409, DecodeFailure to 400" |
+| interface specification | one sentence in the Phase 6 prompt; 11 of its words are the entire feature list | "static/index.html: a single-file vanilla HTML/CSS/JS task board against /api/tasks: create, filter by status, advance status, delete, surface JSON error bodies" |
+| API contract | the Phase 6 route clause | "GET /api/tasks?status= (unknown value raises ValidationFailed), GET/PATCH/DELETE /api/tasks/&lt;id&gt; via LongVar, POST /api/tasks returns 201" |
+| acceptance criteria | the Phase 6 suite clause, and Step 6.3 as the manual gate | "201 create; 400 empty title; 400 malformed JSON (not 500); 404 missing id; 409 illegal transition; 400 unknown status; a full lifecycle round-trip"; "open http://localhost:8080 and create a task in the UI you never wrote" |
+
+Read the third column top to bottom and the pattern emerges. The human never wrote prose about what the software should do, but the human absolutely decided what the software should do, in the places where deciding matters: the data shapes, the invariants, the legal transitions, the exact status code of every error. Notice also the register those words are in. The business rules are a set of pairs, the bounds are numbers, the API contract is a route-to-code mapping; the direction is given as data and constraints, not as narrative. What the human never supplied is everything between those decisions, the layout of the page, the wording of buttons, the order of form fields, the hundreds of small choices a GUI and a codebase are made of. Those came from somewhere else.
+
+### P.2. The genre is the missing requirements document
+
+The phrase task manager is not a description; it is a genre selection. The model has absorbed thousands of task boards, todo applications, and CRUD interfaces, and that mass of training data functions as a prior over what such applications contain: a list of items, a text field to add one, a way to filter, a control to advance status, a delete affordance, error messages surfaced near the action. When Phase 6 says task board and then spends only 11 words on features, create, filter by status, advance status, delete, surface JSON error bodies, it is not under-specifying; it is pointing at a distribution and asking for a typical member of it.
+
+This is why the direction can be so short here and would be short nowhere else. In conventional development the specification must be explicit in proportion to how much the builder cannot be assumed to know. A human contractor also does not need a wireframe to build a todo list, and for the same reason: the genre carries the requirements. What is new in the agentic setting is only the degree, because the model's prior is broader and cheaper to invoke than any contractor's experience. The two words task management in Phase 1 do more specification work than any other two words in this tutorial.
+
+The economics follow immediately. Writing a GUI specification is recall: you must produce, from nothing, every decision in advance. Judging a rendered GUI is recognition: you look at the page the genre produced and say yes, or no, or change this. Recognition is drastically cheaper than recall for in-distribution artifacts, and this tutorial's whole stance on requirements is to spend human effort on recognition wherever the genre permits it.
+
+### P.3. The three converters: how implicit direction becomes explicit contract
+
+Letting a model fill gaps is only safe if the filled gaps become visible before they become load-bearing. The tutorial does this with three converters, each of which turns a silent completion into an explicit artifact a human disposes of.
+
+The first converter is the verbatim report. Phase 5 does not merely tell the implementer the transition rules; it ends with report the transition set verbatim. Whatever the model actually encoded, including anything it filled in around the edges, comes back to you as a printable set you diff against your intent by eye. The requirements review happens after implementation, on the implementation's own statement of the rules, which is possible only because the rules were forced into data rather than scattered through if-trees.
+
+The second converter is the pinned test. The moment a filled-in behavior exists, a suite freezes it: JsonCodecSuite freezes the wire format down to the clause enum encodes as bare string "InProgress", and TaskRoutesSuite freezes the status code of every error path per the acceptance row in the table above. From that commit on, the gap-filling is no longer a model disposition that could drift on the next run; it is a contract that fails loudly when touched, and the reviewer treats edits to those tests as major findings. The genre proposed; the test disposed.
+
+The third converter is the browser gate at Step 6.3, and it deserves to be recognized for what it is: the GUI requirements review, held after the GUI exists. You never told the system what the page should look like, so the gate is where you look at what the genre produced and either ratify it by committing or direct changes in plain sentences, move the filter, label the button Done. Direction about the interface is given retroactively, at the moment it is cheapest to give, against a concrete rendering instead of an imagined one. The same holds for behavior: if using the page reveals that a filled-in rule is wrong, that is a semantic finding, and [Appendix N](#appendix-n-fixing-a-semantic-error-in-the-business-logic) is its repair path, beginning with the human stating the intended rule in one sentence.
+
+### P.4. One behavior traced end to end
+
+Follow the advance-status button, since no sentence in this tutorial ever asked for a button. The chain: Phase 1 says task-management web app, selecting the genre. Phase 3 gives status a type, with Todo, InProgress, Done. Phase 5 gives it rules, the human-authored pairs Todo to InProgress, InProgress to Done, Done to Todo, InProgress to Todo, which is the only place the actual business logic was ever written down, and it was written as data by you. Phase 6 spends two words, advance status, and the model's genre prior expands them into a control on each task card, wired to PATCH /api/tasks/id, with the 409 from an illegal transition surfaced in the page. Step 6.3 is where a human first sees the button and clicks it, ratifying the expansion. TaskRoutesSuite pins 409 illegal transition so the behavior can never drift silently.
+
+Audit the chain for authorship and the division of labor is exact: the human wrote the rules and the type, the model wrote everything visible, and every model contribution passed through one of the three converters before it counted. That is the tutorial's answer to no direction from the human: the human directed the invariants and disposed of the completions, and nothing else needed directing.
+
+### P.5. The limits, stated plainly
+
+This scheme has a boundary, and it is the distribution. TaskForge sits dead center in the most heavily represented genre in the training data, which is why 11 words could specify a frontend. The further your application sits from convention, the more the prior fills gaps with plausible-but-wrong material, and the more dangerous the scheme becomes, because the second converter then pins wrong guesses with confident tests, manufacturing semantic errors at scale. The working rule: the amount of explicit human direction required is inversely proportional to how conventional the desired behavior is. A pricing engine, a compliance workflow, a scheduling constraint solver, anything where your rules differ from the obvious ones, must have those rules written by the human as data in the prompt, exactly as the transition set was, because that is precisely where the genre would guess wrong.
+
+Two countermeasures from elsewhere in this tutorial generalize here. The build-engineer's practice of marking deliberate absences, the comment saying circe is deliberately not here, has a requirements twin: state the conventions you do not want, since the prior will otherwise supply them silently, pagination you did not ask for, a sort order you never chose. And the report contract is your instrument for surfacing the rest: any prompt that leaves room for genre completion should end the way Phase 5 and Phase 6 do, report the transition set verbatim, report the route table and each error's status code, because you can only ratify what you can see.
+
+### P.6. The protocol, compressed
+
+For your own application, the requirements method of this tutorial is five sentences. Write the data model and the invariants yourself, as types, bounds, and rule sets, in the register of the third column above, never as prose features. Select the genre with the fewest words that pick it out, and name the deviations from convention explicitly, including the conventions you refuse. Demand every filled-in decision back as verbatim data in reports. Pin every accepted behavior with a test the moment it exists. Hold the interface review in a browser against the real page, and route what you see through the same owners and gates as every other change.
+
+What this replaces is not specification; it is anticipation. The direction the human gives is exactly as binding as in any process, but it is given where recognition can substitute for recall, and the system is built so that nothing the model assumed on your behalf can reach production without having been shown to you first.
