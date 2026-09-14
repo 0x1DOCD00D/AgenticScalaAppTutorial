@@ -50,7 +50,8 @@ jobs:
             git commit -m "chore(deps): weekly dependency maintenance"
             git push origin "$BRANCH"
             gh pr create --title "Weekly dependency maintenance" \
-              --body-file audit.txt --base main --head "$BRANCH"
+              --body-file audit.txt --base main --head "$BRANCH" \
+            || echo "::notice::PR creation failed (Actions may not have permission to open PRs). Branch '$BRANCH' was pushed — open the PR manually."
           else
             echo "No dependency changes this week."
           fi
