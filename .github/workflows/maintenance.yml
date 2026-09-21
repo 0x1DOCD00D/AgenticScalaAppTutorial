@@ -50,7 +50,8 @@ jobs:
             git commit -m "chore(deps): weekly dependency maintenance"
             git push origin "$BRANCH"
             gh pr create --title "Weekly dependency maintenance" \
-              --body-file audit.txt --base main --head "$BRANCH"
+              --body-file audit.txt --base main --head "$BRANCH" \
+              || echo "::warning::Could not create PR automatically. Branch '$BRANCH' has been pushed — open a PR manually or enable 'Allow GitHub Actions to create and approve pull requests' in repository Settings → Actions → General."
           else
             echo "No dependency changes this week."
           fi
